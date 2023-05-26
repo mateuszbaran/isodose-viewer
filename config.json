@@ -1,0 +1,22 @@
+{
+  "TPSdoseFname": "/home/mateusz/Desktop/tmp/isodose-data/DCMTPS_Calculated(TEST FANTOM ANTROPOMOR).dcm",
+  "3DVHdoseFname": "/home/mateusz/Desktop/tmp/isodose-data/ACPDP_HighSensitivity_DOSE.dcm",
+  "RtStructFname": "/home/mateusz/Desktop/tmp/isodose-data/DCMRT_Structures(TEST FANTOM ANTROPOMOR).dcm",
+  "CTDir": "/home/mateusz/Desktop/tmp/isodose-data/CT/",
+  "saveDir": "./results/",
+  "doseTol": 3,
+  "distTol": 3,
+  "DVHBins": 200,
+  "DVHRange": [0.0, 100.0],
+  "lower_percent_dose_cutoff": 20,
+  "isodoseLevels": [
+    61,
+    35,
+    61
+  ],
+  "structureNames": [
+    "PTV_PerPlan",
+    "brainstem",
+    "CTV"
+  ]
+}
