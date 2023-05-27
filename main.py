@@ -18,7 +18,7 @@ import json
 from common.dicom_tools import read_dicom_3d, read_tps_dose, draw_contours, display_structure_ids_ds, \
     rename_CTs_to_SOPInstanceUID, resample_doses_to_ct
 
-from common.qa_utils import calculate_dvh, calculate_hot_cold_vols
+from common.qa_utils import calculate_dvh, calculate_hot_cold_vols, prepare_hot_cold_image
 
 import vispy.color
 
@@ -189,7 +189,8 @@ class App(QWidget):
         self.dvh_plot_widget = pg.plot(title="DVH")
         self.dvh_plot_widget.setLabel('left', 'Volume (relative to volume of ROI)')
         self.dvh_plot_widget.setLabel('bottom', 'Dose [Gy]')
-        self.sel_isodose_line = pg.InfiniteLine(self.isodose_spinbox.value(), pen=pg.mkPen(color=(200, 200, 255), style=QtCore.Qt.DotLine))
+        self.sel_isodose_line = pg.InfiniteLine(self.isodose_spinbox.value(),
+                                                pen=pg.mkPen(color=(200, 200, 255), style=QtCore.Qt.DotLine))
         self.dvh_plot_widget.addItem(self.sel_isodose_line)
 
         self.dd_plot_widget = pg.plot(title="Dose difference (measured - planned)")
@@ -334,13 +335,27 @@ class App(QWidget):
 
         green = vispy.color.Colormap([[0.0, 0.0, 0.0], [0.0, 1.0, 0.0]])
         red = vispy.color.Colormap([[0.0, 0.0, 0.0], [1.0, 0.0, 0.0]])
+        blue = vispy.color.Colormap([[0.0, 0.0, 0.0], [0.0, 0.0, 1.0]])
 
         if dose_measured is not None:
             measured_layer = viewer.add_image(dose_measured, name="Measured dose", opacity=0.4, scale=ct_scale)
             measured_layer.colormap = 'red', red
         if dose_planned is not None:
             planned_layer = viewer.add_image(dose_planned, name="Planned dose", opacity=0.4, scale=ct_scale)
-            planned_layer.colormap = 'green', green
+            planned_layer.colormap = 'blue', blue
+
+        selected_roi_id = self.roi_combobox.currentData()
+        if selected_roi_id is not None:
+            isodose_Gy = self.isodose_spinbox.value()
+            img_hot_cold = prepare_hot_cold_image(self.planned_dose_ct, self.measured_dose_ct,
+                                                  self.contours[selected_roi_id], isodose_Gy)
+            roi_mask_layer = viewer.add_image(self.contours[selected_roi_id].astype(np.float32),
+                                              name=f"ROI {self.roi_combobox.currentText()} Gy",
+                                              opacity=0.8, scale=ct_scale, blending='additive')
+            roi_mask_layer.colormap = 'green', green
+
+            hot_cold_layer = viewer.add_image(img_hot_cold, name=f"Hot and cold areas for isodose {isodose_Gy} Gy",
+                                              opacity=0.9, rgb=True, scale=ct_scale, blending='additive')
 
         viewer.scale_bar.visible = True
         viewer.scale_bar.unit = "mm"

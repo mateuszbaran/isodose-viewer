@@ -28,7 +28,8 @@ def calculate_roi_volume(roi_mask, grid_cm=None):
     if grid_cm is None:
         return number_of_voxels
     else:
-        vol_voxel_mm3 = np.abs((grid_cm[0][1] - grid_cm[0][0])*(grid_cm[1][1] - grid_cm[1][0])*(grid_cm[2][1] - grid_cm[2][0]))
+        vol_voxel_mm3 = np.abs(
+            (grid_cm[0][1] - grid_cm[0][0]) * (grid_cm[1][1] - grid_cm[1][0]) * (grid_cm[2][1] - grid_cm[2][0]))
         return number_of_voxels * vol_voxel_mm3 / 1000
 
 
@@ -76,7 +77,7 @@ def filter_phsp(input_phsp, limit_cm=5.5, check_y=True, symmetrize=True):
         selected[:, 3] = selected[:, 3] * signs
 
     return selected
-    
+
 
 def calculate_Dx(dose_hist, vol_hist, dx):
     """
@@ -98,3 +99,16 @@ def calculate_hot_cold_vols(planned_doses, measured_doses, for_doses):
         cold_vols.append(100 * np.count_nonzero(np.logical_and(planned_doses > dose, measured_doses < dose)) / vol)
 
     return np.array(hot_vols), np.array(cold_vols)
+
+
+def prepare_hot_cold_image(planned_doses, measured_doses, mask, isodose):
+    img = np.zeros((planned_doses.shape[0], planned_doses.shape[1], planned_doses.shape[2], 3))
+    cold_region = np.logical_and(
+        np.logical_and(planned_doses >= isodose, measured_doses <= isodose),
+        mask)
+    hot_region = np.logical_and(
+        np.logical_and(planned_doses <= isodose, measured_doses >= isodose),
+        mask)
+
+    img = np.stack([hot_region, mask, cold_region], dtype=np.float32, axis=3)
+    return img
