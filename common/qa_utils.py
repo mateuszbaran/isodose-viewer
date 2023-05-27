@@ -87,3 +87,14 @@ def calculate_Dx(dose_hist, vol_hist, dx):
     :return:
     """
     return np.interp(dx, np.flip(vol_hist), np.flip(dose_hist))
+
+
+def calculate_hot_cold_vols(planned_doses, measured_doses, for_doses):
+    hot_vols = []
+    cold_vols = []
+    vol = len(planned_doses)
+    for dose in for_doses:
+        hot_vols.append(100 * np.count_nonzero(np.logical_and(planned_doses < dose, measured_doses > dose)) / vol)
+        cold_vols.append(100 * np.count_nonzero(np.logical_and(planned_doses > dose, measured_doses < dose)) / vol)
+
+    return np.array(hot_vols), np.array(cold_vols)
