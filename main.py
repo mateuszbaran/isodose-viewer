@@ -63,7 +63,7 @@ class App(QWidget):
         self.top = 10
         self.width = 1024
         self.height = 768
-        self.cache = diskcache.Cache("tmp")
+        self.cache = diskcache.Cache("tmp", size_limit=int(4e9))
         self.cache.reset('cull_limit', 0)
         self.initUI()
         self.load_config()

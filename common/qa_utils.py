@@ -110,5 +110,6 @@ def prepare_hot_cold_image(planned_doses, measured_doses, mask, isodose):
         np.logical_and(planned_doses <= isodose, measured_doses >= isodose),
         mask)
 
-    img = np.stack([hot_region, mask, cold_region], dtype=np.float32, axis=3)
+    green = np.logical_and(np.logical_and(mask, np.logical_not(hot_region)), np.logical_not(cold_region))
+    img = np.stack([hot_region, green, cold_region], dtype=np.float32, axis=3)
     return img
