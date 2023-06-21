@@ -18,11 +18,14 @@ import json
 from common.dicom_tools import read_dicom_3d, read_tps_dose, draw_contours, display_structure_ids_ds, \
     rename_CTs_to_SOPInstanceUID, resample_doses_to_ct
 
-from common.qa_utils import calculate_dvh, calculate_hot_cold_vols, prepare_hot_cold_image
+from common.qa_utils import calculate_dvh, calculate_hot_cold_vols, prepare_hot_cold_image, prepare_cold_val, \
+    prepare_hot_val
 
 import vispy.color
 
 import numpy as np
+
+import pymedphys
 
 
 def load_data(
@@ -39,6 +42,7 @@ def load_data(
 class App(QWidget):
     def __init__(self):
         super().__init__()
+        self.gamma_full = None
         self.sel_isodose_line = None
         self.dd_plot_widget = None
         self.dvh_plot_widget = None
@@ -103,6 +107,18 @@ class App(QWidget):
         self.dvh_plot_widget.plot(mod_dose_hist, cold_vols, pen=pg.mkPen(color=(10, 10, 210)), name="Cold volume")
 
         self.dvh_plot_widget.setXRange(dose_range[0], dose_range[1])
+
+    def update_gamma(self):
+        self.gamma_label.setText("Updating gamma...")
+        self.gamma_full = pymedphys.gamma(self.ct[0], self.planned_dose_ct, self.ct[0],
+                                          self.measured_dose_ct,
+                                          dose_percent_threshold=float(self.configs["gamma"]["doseTol_percent"]),
+                                          distance_mm_threshold=float(self.configs["gamma"]["distanceTol_mm"]),
+                                          max_gamma=float(self.configs["gamma"]["maxGamma"]),
+                                          lower_percent_dose_cutoff=float(
+                                              self.configs["gamma"]["lowerDoseCutoffPercent"]),
+                                          interp_fraction=int(self.configs["gamma"]["interpFraction"]))
+        self.gamma_label.setText("Gamma updated")
 
     def recalculate_plots_for_isodose(self):
         # DD plot
@@ -171,6 +187,13 @@ class App(QWidget):
         self.planned_dose_label.setMaximumWidth(200)
         self.planned_dose_label.setWordWrap(True)
 
+        button_update_gamma = QPushButton(self)
+        button_update_gamma.setText("Update gamma analysis")
+        button_update_gamma.clicked.connect(self.update_gamma)
+        self.gamma_label = QLabel("Gamma not updated", self)
+        self.gamma_label.setMaximumWidth(200)
+        self.gamma_label.setWordWrap(True)
+
         button_browse_slices = QPushButton(self)
         button_browse_slices.setText("Browse slices")
         button_browse_slices.clicked.connect(self.browse_slices)
@@ -209,7 +232,9 @@ class App(QWidget):
         grid_layout.addWidget(self.planned_dose_label, 1, 2)
         grid_layout.addWidget(button_open_measured, 0, 3)
         grid_layout.addWidget(self.measured_dose_label, 1, 3)
-        grid_layout.addWidget(button_browse_slices, 0, 4)
+        grid_layout.addWidget(button_update_gamma, 0, 4)
+        grid_layout.addWidget(self.gamma_label, 1, 4)
+        grid_layout.addWidget(button_browse_slices, 0, 5)
 
         plot_layout.addWidget(self.dvh_plot_widget)
         plot_layout.addWidget(self.dd_plot_widget)
@@ -234,12 +259,12 @@ class App(QWidget):
 
     def update_ct(self, fname):
         try:
-            rename_CTs_to_SOPInstanceUID(fname)
+            rename_CTs_to_SOPInstanceUID(fname + "/")
             cache_key = f"CT file {fname}"
             self.ct = self.cache.get(cache_key, None)
             self.dicom_ct_dir = fname
             if self.ct is None:
-                self.ct = read_dicom_3d(fname)
+                self.ct = read_dicom_3d(fname + "/")
                 self.cache.add(cache_key, self.ct)
 
             self.ct_label.setText("Loaded CT:\n" + fname)
@@ -283,6 +308,8 @@ class App(QWidget):
                 self.planned_dose = read_tps_dose(fname)
                 self.planned_dose_ct = resample_doses_to_ct(self.planned_dose, self.ct)
                 self.cache.add(cache_key, (self.planned_dose, self.planned_dose_ct))
+            self.gamma_full = None
+            self.gamma_label.setText("Gamma not updated")
             self.planned_dose_label.setText("Loaded planned dose\n" + fname)
         except Exception as e:
             print(e)
@@ -297,6 +324,8 @@ class App(QWidget):
                 self.measured_dose = read_tps_dose(fname)
                 self.measured_dose_ct = resample_doses_to_ct(self.measured_dose, self.ct)
                 self.cache.add(cache_key, (self.measured_dose, self.measured_dose_ct))
+            self.gamma_full = None
+            self.gamma_label.setText("Gamma not updated")
             self.measured_dose_label.setText("Loaded measured dose:\n" + fname)
         except Exception as e:
             print(e)
@@ -315,19 +344,23 @@ class App(QWidget):
 
     def open_file_ct_clicked(self):
         fname = QFileDialog.getExistingDirectory(self, 'Open CT folder')
-        self.update_ct(fname[0])
+        if fname != "":
+            self.update_ct(fname)
 
     def open_file_rtstruct_clicked(self):
-        fname = QFileDialog.getOpenFileName(self, 'Open RTStruct file', "RT files (*.dcm)")
-        self.update_rtstruct(fname[0])
+        fname = QFileDialog.getOpenFileName(self, 'Open RTStruct file', "RT files (*.dcm);;All files (*.*)")
+        if fname[0] != "":
+            self.update_rtstruct(fname[0])
 
     def open_file_measured_clicked(self):
-        fname = QFileDialog.getOpenFileName(self, 'Open measured dose file', "RT files (*.dcm)")
-        self.update_measured_dose(fname[0])
+        fname = QFileDialog.getOpenFileName(self, 'Open measured dose file', "RT files (*.dcm);;All files (*.*)")
+        if fname[0] != "":
+            self.update_measured_dose(fname[0])
 
     def open_file_planned_clicked(self):
-        fname = QFileDialog.getOpenFileName(self, 'Open planned dose file', "RT files (*.dcm)")
-        self.update_planned_dose(fname[0])
+        fname = QFileDialog.getOpenFileName(self, 'Open planned dose file', "RT files (*.dcm);;All files (*.*)")
+        if fname[0] != "":
+            self.update_planned_dose(fname[0])
 
     def view_napari(self, ct, dose_measured=None, dose_planned=None):
         ct_scale = tuple((self.ct[0][i][2] - self.ct[0][i][1] for i in (0, 1, 2)))
@@ -336,12 +369,16 @@ class App(QWidget):
         green = vispy.color.Colormap([[0.0, 0.0, 0.0], [0.0, 1.0, 0.0]])
         red = vispy.color.Colormap([[0.0, 0.0, 0.0], [1.0, 0.0, 0.0]])
         blue = vispy.color.Colormap([[0.0, 0.0, 0.0], [0.0, 0.0, 1.0]])
+        neg_blue = vispy.color.Colormap([[0.0, 0.0, 1.0], [0.0, 0.0, 0.0]])
+        divergent = vispy.color.Colormap([[0.0, 0.0, 1.0], [0.0, 0.0, 0.0], [1.0, 0.0, 0.0]], [0.0, 0.5, 1.0])
 
         if dose_measured is not None:
-            measured_layer = viewer.add_image(dose_measured, name="Measured dose", opacity=0.4, scale=ct_scale)
+            measured_layer = viewer.add_image(dose_measured, name="Measured dose", opacity=0.4, scale=ct_scale,
+                                              visible=False)
             measured_layer.colormap = 'red', red
         if dose_planned is not None:
-            planned_layer = viewer.add_image(dose_planned, name="Planned dose", opacity=0.4, scale=ct_scale)
+            planned_layer = viewer.add_image(dose_planned, name="Planned dose", opacity=0.4, scale=ct_scale,
+                                             visible=False)
             planned_layer.colormap = 'blue', blue
 
         selected_roi_id = self.roi_combobox.currentData()
@@ -351,14 +388,28 @@ class App(QWidget):
                                                   self.contours[selected_roi_id], isodose_Gy)
             roi_mask_layer = viewer.add_image(self.contours[selected_roi_id].astype(np.float32),
                                               name=f"ROI {self.roi_combobox.currentText()} Gy",
-                                              opacity=0.8, scale=ct_scale, blending='additive')
+                                              opacity=0.8, scale=ct_scale, blending='additive', visible=False)
             roi_mask_layer.colormap = 'green', green
 
             hot_cold_layer = viewer.add_image(img_hot_cold, name=f"Hot and cold areas for isodose {isodose_Gy} Gy",
                                               opacity=0.9, rgb=True, scale=ct_scale, blending='additive')
 
+            img_hot_val = prepare_hot_val(self.planned_dose_ct, self.measured_dose_ct,
+                                          self.contours[selected_roi_id], isodose_Gy)
+            img_cold_val = prepare_cold_val(self.planned_dose_ct, self.measured_dose_ct,
+                                            self.contours[selected_roi_id], isodose_Gy)
+            cold_val_layer = viewer.add_image(img_cold_val,
+                                              name=f"Cold areas for isodose {isodose_Gy} Gy",
+                                              opacity=0.8, scale=ct_scale, blending='additive')
+            hot_val_layer = viewer.add_image(img_hot_val,
+                                             name=f"Hot areas for isodose {isodose_Gy} Gy",
+                                             opacity=0.8, scale=ct_scale, blending='additive')
+            hot_val_layer.colormap = 'red'
+            cold_val_layer.colormap = 'neg_blue', neg_blue
+
         viewer.scale_bar.visible = True
         viewer.scale_bar.unit = "mm"
+        viewer.dims.order = (2, 0, 1)
         return viewer
 
 

@@ -2,9 +2,10 @@ nibabel~=5.1.0
 napari~=0.4.17
 PyQt5~=5.15.9
 numpy~=1.24.3
-pydicom~=2.3.1
+pydicom==2.3.1
 opencv-python-headless~=4.7.0.72
-pandas~=2.0.1
+pandas==2.0.2
 scipy~=1.10.1
 vispy~=0.11.0
 pyqtgraph~=0.13.3
+pymedphys~=0.39.3

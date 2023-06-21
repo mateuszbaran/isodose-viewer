@@ -18,5 +18,12 @@
     "PTV_PerPlan",
     "brainstem",
     "CTV"
-  ]
+  ],
+  "gamma": {
+    "interpFraction": 2,
+    "doseTol_percent": 3,
+    "distanceTol_mm": 3,
+    "lowerDoseCutoffPercent": 10,
+    "maxGamma": 2.0
+  }
 }

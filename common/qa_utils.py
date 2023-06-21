@@ -102,7 +102,6 @@ def calculate_hot_cold_vols(planned_doses, measured_doses, for_doses):
 
 
 def prepare_hot_cold_image(planned_doses, measured_doses, mask, isodose):
-    img = np.zeros((planned_doses.shape[0], planned_doses.shape[1], planned_doses.shape[2], 3))
     cold_region = np.logical_and(
         np.logical_and(planned_doses >= isodose, measured_doses <= isodose),
         mask)
@@ -113,3 +112,27 @@ def prepare_hot_cold_image(planned_doses, measured_doses, mask, isodose):
     green = np.logical_and(np.logical_and(mask, np.logical_not(hot_region)), np.logical_not(cold_region))
     img = np.stack([hot_region, green, cold_region], dtype=np.float32, axis=3)
     return img
+
+
+def prepare_hot_val(planned_doses, measured_doses, mask, isodose, clip_high=5.0):
+    hot_region = np.logical_and(
+        np.logical_and(planned_doses <= isodose, measured_doses >= isodose),
+        mask)
+
+    vals = (measured_doses - isodose) * hot_region
+    vals = np.clip(vals, 0.0, clip_high)
+    vals[0, 0, 0] = 0.0
+    vals[0, 0, 1] = clip_high
+    return vals
+
+
+def prepare_cold_val(planned_doses, measured_doses, mask, isodose, clip_low=-5.0):
+    cold_region = np.logical_and(
+        np.logical_and(planned_doses >= isodose, measured_doses <= isodose),
+        mask)
+
+    vals = (measured_doses - isodose) * cold_region
+    vals = np.clip(vals, clip_low, 0.0)
+    vals[0, 0, 0] = clip_low
+    vals[0, 0, 1] = 0.0
+    return vals
