@@ -7,7 +7,7 @@ import diskcache as dc
 import traceback
 
 from PyQt5.QtWidgets import QApplication, QMainWindow, QWidget, QPushButton, QFileDialog, QMessageBox, QGridLayout, \
-    QLabel, QVBoxLayout, QHBoxLayout, QComboBox, QDoubleSpinBox
+    QLabel, QVBoxLayout, QHBoxLayout, QComboBox, QDoubleSpinBox, QTableWidget, QTableWidgetItem, QAbstractItemView
 
 from PyQt5 import QtCore
 
@@ -19,7 +19,7 @@ from common.dicom_tools import read_dicom_3d, read_tps_dose, draw_contours, disp
     rename_CTs_to_SOPInstanceUID, resample_doses_to_ct
 
 from common.qa_utils import calculate_dvh, calculate_hot_cold_vols, prepare_hot_cold_image, prepare_cold_val, \
-    prepare_hot_val
+    prepare_hot_val, calculate_Dx, calculate_gpr_for_roi
 
 import vispy.color
 
@@ -42,6 +42,7 @@ def load_data(
 class App(QWidget):
     def __init__(self):
         super().__init__()
+        self.roi_stat_table = None
         self.gamma_full = None
         self.sel_isodose_line = None
         self.dd_plot_widget = None
@@ -57,16 +58,14 @@ class App(QWidget):
         self.rtstruct_label = None
         self.configs = None
         self.ct = None
-        self.measured_dose = None
-        self.planned_dose = None
         self.ct_label = None
         self.measured_dose_label = None
         self.planned_dose_label = None
         self.title = 'Isodose explorer'
         self.left = 10
         self.top = 10
-        self.width = 1024
-        self.height = 768
+        self.width = 1600
+        self.height = 900
         self.cache = diskcache.Cache("tmp", size_limit=int(4e9))
         self.cache.reset('cull_limit', 0)
         self.initUI()
@@ -82,6 +81,14 @@ class App(QWidget):
         self.update_measured_dose(self.configs['3DVHdoseFname'])
         self.update_planned_dose(self.configs['TPSdoseFname'])
         self.update_rtstruct(self.configs['RtStructFname'])
+
+    def calc_dvh_for_roi(self, doses, roi_id):
+        dose_range = (float(self.configs['DVHRange'][0]), float(self.configs['DVHRange'][1]))
+        nbins = self.configs['DVHBins']
+
+        doses_for_dvh = doses[self.contours[roi_id] != 0]
+        mod_dose_hist, mod_vol_hist = calculate_dvh(doses_for_dvh, dose_range, nbins)
+        return mod_dose_hist, mod_vol_hist
 
     def update_dvh_plot(self):
         selected_roi_id = self.roi_combobox.currentData()
@@ -119,6 +126,7 @@ class App(QWidget):
                                               self.configs["gamma"]["lowerDoseCutoffPercent"]),
                                           interp_fraction=int(self.configs["gamma"]["interpFraction"]))
         self.gamma_label.setText("Gamma updated")
+        self.update_roi_stat_table()
 
     def recalculate_plots_for_isodose(self):
         # DD plot
@@ -198,11 +206,11 @@ class App(QWidget):
         button_browse_slices.setText("Browse slices")
         button_browse_slices.clicked.connect(self.browse_slices)
 
-        self.roi_combobox = QComboBox()
+        self.roi_combobox = QComboBox(self)
         self.roi_combobox.addItem("Select ROI")
         self.roi_combobox.currentIndexChanged.connect(self.update_roi_selection)
 
-        self.isodose_spinbox = QDoubleSpinBox()
+        self.isodose_spinbox = QDoubleSpinBox(self)
         self.isodose_spinbox.setRange(0.0, 100.0)
         self.isodose_spinbox.setPrefix("Isodose: ")
         self.isodose_spinbox.setSuffix(" Gy")
@@ -220,9 +228,20 @@ class App(QWidget):
         self.dd_plot_widget.setLabel('left', 'Fraction of region volume')
         self.dd_plot_widget.setLabel('bottom', 'Dose difference [Gy]')
 
+        self.roi_stat_table = QTableWidget(self)
+        self.roi_stat_table.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        roi_stat_column_headers = ["ROI", "GPR [%]", "ΔD 95%", "ΔD 50%", "ΔD 5%", "mean D ref", "std D ref",
+                                   "min D ref", "max D ref", "mean D cmp", "std D cmp", "min D cmp", "max D cmp"]
+        self.roi_stat_table.setColumnCount(len(roi_stat_column_headers))
+        self.roi_stat_table.setHorizontalHeaderLabels(roi_stat_column_headers)
+        self.roi_stat_table.setMinimumHeight(220)
+        self.roi_stat_table.setMaximumHeight(370)
+        self.update_roi_stat_table()
+
         outer_layout = QVBoxLayout()
         grid_layout = QGridLayout()
         plot_layout = QHBoxLayout()
+        mid_layout = QHBoxLayout()
         # Add widgets to the layout
         grid_layout.addWidget(button_open_ct, 0, 0)
         grid_layout.addWidget(self.ct_label, 1, 0)
@@ -236,13 +255,16 @@ class App(QWidget):
         grid_layout.addWidget(self.gamma_label, 1, 4)
         grid_layout.addWidget(button_browse_slices, 0, 5)
 
+        mid_layout.addWidget(self.roi_combobox)
+        mid_layout.addWidget(self.isodose_spinbox)
+
         plot_layout.addWidget(self.dvh_plot_widget)
         plot_layout.addWidget(self.dd_plot_widget)
         # Set the layout on the application's window
         outer_layout.addLayout(grid_layout)
-        outer_layout.addWidget(self.roi_combobox)
-        outer_layout.addWidget(self.isodose_spinbox)
+        outer_layout.addLayout(mid_layout)
         outer_layout.addLayout(plot_layout)
+        outer_layout.addWidget(self.roi_stat_table)
         outer_layout.addWidget(self.status_label)
         self.setLayout(outer_layout)
         self.show()
@@ -293,6 +315,8 @@ class App(QWidget):
                 self.roi_combobox.addItem(roi[1], userData=roi[0])
                 self.status_label.setText(f"Reading ROI {roi}")
             self.rtstruct_label.setText("Loaded RTStruct:\n" + fname)
+
+            self.update_roi_stat_table()
         except Exception as e:
             print(e)
             print(traceback.format_exc())
@@ -303,12 +327,13 @@ class App(QWidget):
     def update_planned_dose(self, fname):
         try:
             cache_key = f"dose file {fname}"
-            self.planned_dose, self.planned_dose_ct = self.cache.get(cache_key, (None, None))
-            if self.planned_dose is None:
-                self.planned_dose = read_tps_dose(fname)
-                self.planned_dose_ct = resample_doses_to_ct(self.planned_dose, self.ct)
-                self.cache.add(cache_key, (self.planned_dose, self.planned_dose_ct))
+            self.planned_dose_ct = self.cache.get(cache_key, None)
+            if self.planned_dose_ct is None:
+                planned_dose = read_tps_dose(fname)
+                self.planned_dose_ct = resample_doses_to_ct(planned_dose, self.ct)
+                self.cache.add(cache_key, self.planned_dose_ct)
             self.gamma_full = None
+            self.update_roi_stat_table()
             self.gamma_label.setText("Gamma not updated")
             self.planned_dose_label.setText("Loaded planned dose\n" + fname)
         except Exception as e:
@@ -319,12 +344,13 @@ class App(QWidget):
     def update_measured_dose(self, fname):
         try:
             cache_key = f"dose file {fname}"
-            self.measured_dose, self.measured_dose_ct = self.cache.get(cache_key, (None, None))
-            if self.measured_dose is None:
-                self.measured_dose = read_tps_dose(fname)
-                self.measured_dose_ct = resample_doses_to_ct(self.measured_dose, self.ct)
-                self.cache.add(cache_key, (self.measured_dose, self.measured_dose_ct))
+            self.measured_dose_ct = self.cache.get(cache_key, None)
+            if self.measured_dose_ct is None:
+                measured_dose = read_tps_dose(fname)
+                self.measured_dose_ct = resample_doses_to_ct(measured_dose, self.ct)
+                self.cache.add(cache_key, self.measured_dose_ct)
             self.gamma_full = None
+            self.update_roi_stat_table()
             self.gamma_label.setText("Gamma not updated")
             self.measured_dose_label.setText("Loaded measured dose:\n" + fname)
         except Exception as e:
@@ -338,6 +364,49 @@ class App(QWidget):
 
     def update_isodose_selection(self):
         self.recalculate_plots_for_isodose()
+
+    def update_roi_stat_table(self):
+        self.roi_stat_table.clearSpans()
+        if self.rois is not None:
+            self.roi_stat_table.setRowCount(len(self.rois))
+            for roi_row, roi in enumerate(self.rois):
+                self.roi_stat_table.setItem(roi_row, 0, QTableWidgetItem(roi[1]))
+
+                if self.planned_dose_ct is not None and self.contours is not None:
+                    doses_ref = self.planned_dose_ct[self.contours[roi[0]] != 0]
+                    mean_dose = np.mean(doses_ref)
+                    self.roi_stat_table.setItem(roi_row, 5, QTableWidgetItem(f"{mean_dose:.2f}"))
+                    std_dose = np.std(doses_ref)
+                    self.roi_stat_table.setItem(roi_row, 6, QTableWidgetItem(f"{std_dose:.2f}"))
+                    min_dose = np.min(doses_ref)
+                    self.roi_stat_table.setItem(roi_row, 7, QTableWidgetItem(f"{min_dose:.2f}"))
+                    max_dose = np.max(doses_ref)
+                    self.roi_stat_table.setItem(roi_row, 8, QTableWidgetItem(f"{max_dose:.2f}"))
+
+                if self.measured_dose_ct is not None and self.contours is not None:
+                    doses_measured = self.measured_dose_ct[self.contours[roi[0]] != 0]
+                    mean_dose = np.mean(doses_measured)
+                    self.roi_stat_table.setItem(roi_row, 9, QTableWidgetItem(f"{mean_dose:.2f}"))
+                    std_dose = np.std(doses_measured)
+                    self.roi_stat_table.setItem(roi_row, 10, QTableWidgetItem(f"{std_dose:.2f}"))
+                    min_dose = np.min(doses_measured)
+                    self.roi_stat_table.setItem(roi_row, 11, QTableWidgetItem(f"{min_dose:.2f}"))
+                    max_dose = np.max(doses_measured)
+                    self.roi_stat_table.setItem(roi_row, 12, QTableWidgetItem(f"{max_dose:.2f}"))
+
+                if self.planned_dose_ct is not None and self.measured_dose_ct is not None and self.contours is not None:
+                    planned_mod_dose_hist, planned_mod_vol_hist = self.calc_dvh_for_roi(self.planned_dose_ct, roi[0])
+                    measured_mod_dose_hist, measured_mod_vol_hist = self.calc_dvh_for_roi(self.measured_dose_ct, roi[0])
+                    for qid, quant in enumerate([95, 50, 5]):
+                        pq = calculate_Dx(planned_mod_dose_hist, planned_mod_vol_hist, quant)
+                        mq = calculate_Dx(measured_mod_dose_hist, measured_mod_vol_hist, quant)
+                        self.roi_stat_table.setItem(roi_row, qid + 2, QTableWidgetItem(f"{(mq - pq):.2f}"))
+                if self.gamma_full is not None and self.contours is not None:
+                    gpr = 100 * calculate_gpr_for_roi(self.gamma_full, self.contours[roi[0]])
+                    self.roi_stat_table.setItem(roi_row, 1, QTableWidgetItem(f"{gpr:.1f}"))
+
+        self.roi_stat_table.resizeColumnsToContents()
+        self.roi_stat_table.resizeRowsToContents()
 
     def browse_slices(self):
         self.view_napari(self.ct[1], dose_measured=self.measured_dose_ct, dose_planned=self.planned_dose_ct)
@@ -406,6 +475,12 @@ class App(QWidget):
                                              opacity=0.8, scale=ct_scale, blending='additive')
             hot_val_layer.colormap = 'red'
             cold_val_layer.colormap = 'neg_blue', neg_blue
+
+        if self.gamma_full is not None:
+            gamma_layer = viewer.add_image((self.gamma_full > 1.0).astype(np.float32),
+                                           name=f"gamma index failures (gamma > 1)",
+                                           opacity=0.8, scale=ct_scale, blending='additive', visible=False)
+            gamma_layer.colormap = 'red'
 
         viewer.scale_bar.visible = True
         viewer.scale_bar.unit = "mm"
