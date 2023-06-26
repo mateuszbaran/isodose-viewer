@@ -25,5 +25,6 @@
     "distanceTol_mm": 3,
     "lowerDoseCutoffPercent": 10,
     "maxGamma": 2.0
-  }
+  },
+  "cacheLimitGB": 40
 }

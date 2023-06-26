@@ -66,8 +66,7 @@ class App(QWidget):
         self.top = 10
         self.width = 1600
         self.height = 900
-        self.cache = diskcache.Cache("tmp", size_limit=int(4e9))
-        self.cache.reset('cull_limit', 0)
+        self.cache = None
         self.initUI()
         self.load_config()
         self.update_dvh_plot()
@@ -76,6 +75,9 @@ class App(QWidget):
         config_fname = 'config.json'
         with open(config_fname, 'r') as config_file:
             self.configs = json.load(config_file)
+
+        self.cache = diskcache.Cache("tmp", size_limit=int(int(self.configs["cacheLimitGB"]) * 1e9))
+        self.cache.reset('cull_limit', 0)
 
         self.update_ct(self.configs['CTDir'])
         self.update_measured_dose(self.configs['3DVHdoseFname'])
