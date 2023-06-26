@@ -419,17 +419,17 @@ class App(QWidget):
             self.update_ct(fname)
 
     def open_file_rtstruct_clicked(self):
-        fname = QFileDialog.getOpenFileName(self, 'Open RTStruct file', "RT files (*.dcm);;All files (*.*)")
+        fname = QFileDialog.getOpenFileName(self, 'Open RTStruct file', filter="RT files (*.dcm);;All files (*.*)")
         if fname[0] != "":
             self.update_rtstruct(fname[0])
 
     def open_file_measured_clicked(self):
-        fname = QFileDialog.getOpenFileName(self, 'Open measured dose file', "RT files (*.dcm);;All files (*.*)")
+        fname = QFileDialog.getOpenFileName(self, 'Open measured dose file', filter="RT files (*.dcm);;All files (*.*)")
         if fname[0] != "":
             self.update_measured_dose(fname[0])
 
     def open_file_planned_clicked(self):
-        fname = QFileDialog.getOpenFileName(self, 'Open planned dose file', "RT files (*.dcm);;All files (*.*)")
+        fname = QFileDialog.getOpenFileName(self, 'Open planned dose file', filter="RT files (*.dcm);;All files (*.*)")
         if fname[0] != "":
             self.update_planned_dose(fname[0])
 
