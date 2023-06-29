@@ -42,6 +42,7 @@ def load_data(
 class App(QWidget):
     def __init__(self):
         super().__init__()
+        self.struct_dcm = None
         self.roi_stat_table = None
         self.gamma_full = None
         self.sel_isodose_line = None
@@ -204,6 +205,10 @@ class App(QWidget):
         self.gamma_label.setMaximumWidth(200)
         self.gamma_label.setWordWrap(True)
 
+        button_close_patient = QPushButton(self)
+        button_close_patient.setText("Close patient")
+        button_close_patient.clicked.connect(self.close_patient)
+
         button_browse_slices = QPushButton(self)
         button_browse_slices.setText("Browse slices")
         button_browse_slices.clicked.connect(self.browse_slices)
@@ -254,8 +259,9 @@ class App(QWidget):
         grid_layout.addWidget(button_open_measured, 0, 3)
         grid_layout.addWidget(self.measured_dose_label, 1, 3)
         grid_layout.addWidget(button_update_gamma, 0, 4)
+        grid_layout.addWidget(button_close_patient, 0, 5)
         grid_layout.addWidget(self.gamma_label, 1, 4)
-        grid_layout.addWidget(button_browse_slices, 0, 5)
+        grid_layout.addWidget(button_browse_slices, 0, 6)
 
         mid_layout.addWidget(self.roi_combobox)
         mid_layout.addWidget(self.isodose_spinbox)
@@ -488,6 +494,22 @@ class App(QWidget):
         viewer.scale_bar.unit = "mm"
         viewer.dims.order = (2, 0, 1)
         return viewer
+
+    def close_patient(self):
+        self.ct = None
+        self.measured_dose_ct = None
+        self.planned_dose_ct = None
+        self.struct_dcm = None
+        self.rois = None
+        self.contours = None
+        self.gamma_full = None
+        self.ct_label.setText("Loaded CT: None")
+        self.rtstruct_label.setText("Loaded RTStruct: None")
+        self.measured_dose_label.setText("Loaded measured dose: None")
+        self.planned_dose_label.setText("Loaded planned dose: None")
+        self.gamma_label.setText("Gamma not updated")
+        self.roi_combobox.clear()
+        self.roi_stat_table.clearContents()
 
 
 if __name__ == '__main__':
