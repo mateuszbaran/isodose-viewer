@@ -9,7 +9,8 @@ import traceback
 from PyQt5.QtWidgets import QApplication, QMainWindow, QWidget, QPushButton, QFileDialog, QMessageBox, QGridLayout, \
     QLabel, QVBoxLayout, QHBoxLayout, QComboBox, QDoubleSpinBox, QTableWidget, QTableWidgetItem, QAbstractItemView
 
-from PyQt5 import QtCore
+from PyQt5 import QtCore, QtGui
+from PyQt5.QtGui import QColor, QPainter
 
 import pyqtgraph as pg
 
@@ -19,7 +20,7 @@ from common.dicom_tools import read_dicom_3d, read_tps_dose, draw_contours, disp
     rename_CTs_to_SOPInstanceUID, resample_doses_to_ct
 
 from common.qa_utils import calculate_dvh, calculate_hot_cold_vols, prepare_hot_cold_image, prepare_cold_val, \
-    prepare_hot_val, calculate_Dx, calculate_gpr_for_roi
+    prepare_hot_val, calculate_Dx, calculate_gpr_for_roi, prepare_confusion_matrix
 
 import vispy.color
 
@@ -39,11 +40,40 @@ def load_data(
     return ct, dose_measured, dose_planned
 
 
+class VerticalLabel(QLabel):
+
+    def __init__(self, *args):
+        QLabel.__init__(self, *args)
+
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.translate(0, self.height())
+        painter.rotate(-90)
+        # calculate the size of the font
+        fm = QtGui.QFontMetrics(painter.font())
+        xoffset = int(fm.boundingRect(self.text()).width() / 2)
+        yoffset = int(fm.boundingRect(self.text()).height() / 2)
+        x = int(self.width() / 2) + yoffset
+        y = int(self.height() / 2) - xoffset
+        # because we rotated the label, x affects the vertical placement, and y affects the horizontal
+        painter.drawText(y, x, self.text())
+        painter.end()
+
+    def minimumSizeHint(self):
+        size = QLabel.minimumSizeHint(self)
+        return QtCore.QSize(size.height(), size.width())
+
+    def sizeHint(self):
+        size = QLabel.sizeHint(self)
+        return QtCore.QSize(size.height(), size.width())
+
+
 class App(QWidget):
     def __init__(self):
         super().__init__()
         self.struct_dcm = None
         self.roi_stat_table = None
+        self.confusion_matrix_table = None
         self.gamma_full = None
         self.sel_isodose_line = None
         self.dd_plot_widget = None
@@ -65,11 +95,12 @@ class App(QWidget):
         self.title = 'Isodose explorer'
         self.left = 10
         self.top = 10
-        self.width = 1600
-        self.height = 900
+        self.load_config()
+        self.width = self.configs["window_width"]
+        self.height = self.configs["window_height"]
         self.cache = None
         self.initUI()
-        self.load_config()
+        self.load_cache()
         self.update_dvh_plot()
 
     def load_config(self):
@@ -77,6 +108,7 @@ class App(QWidget):
         with open(config_fname, 'r') as config_file:
             self.configs = json.load(config_file)
 
+    def load_cache(self):
         self.cache = diskcache.Cache("tmp", size_limit=int(int(self.configs["cacheLimitGB"]) * 1e9))
         self.cache.reset('cull_limit', 0)
 
@@ -242,13 +274,23 @@ class App(QWidget):
         self.roi_stat_table.setColumnCount(len(roi_stat_column_headers))
         self.roi_stat_table.setHorizontalHeaderLabels(roi_stat_column_headers)
         self.roi_stat_table.setMinimumHeight(220)
+        self.roi_stat_table.setMinimumWidth(700)
         self.roi_stat_table.setMaximumHeight(370)
+
+        self.confusion_matrix_table = QTableWidget(self)
+        self.confusion_matrix_table.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        self.confusion_matrix_table.setColumnCount(self.configs['confusion_matrix_N'])
+        self.confusion_matrix_table.setRowCount(self.configs['confusion_matrix_N'])
+        self.confusion_matrix_table.setMinimumHeight(220)
+        self.confusion_matrix_table.setMaximumHeight(370)
+
         self.update_roi_stat_table()
 
         outer_layout = QVBoxLayout()
         grid_layout = QGridLayout()
         plot_layout = QHBoxLayout()
         mid_layout = QHBoxLayout()
+        bottom_layout = QHBoxLayout()
         # Add widgets to the layout
         grid_layout.addWidget(button_open_ct, 0, 0)
         grid_layout.addWidget(self.ct_label, 1, 0)
@@ -268,11 +310,17 @@ class App(QWidget):
 
         plot_layout.addWidget(self.dvh_plot_widget)
         plot_layout.addWidget(self.dd_plot_widget)
+
+        bottom_layout.addWidget(self.roi_stat_table, 55)
+        bottom_layout.addWidget(VerticalLabel("Measured dose in rows, expected in columns [Gy]"), 1)
+        bottom_layout.addWidget(VerticalLabel("Upper: confusion matrix (global normalization"), 1)
+        bottom_layout.addWidget(VerticalLabel("Lower: cumulative dose error [Gy*cm^3]"), 1)
+        bottom_layout.addWidget(self.confusion_matrix_table, 40)
         # Set the layout on the application's window
         outer_layout.addLayout(grid_layout)
         outer_layout.addLayout(mid_layout)
         outer_layout.addLayout(plot_layout)
-        outer_layout.addWidget(self.roi_stat_table)
+        outer_layout.addLayout(bottom_layout)
         outer_layout.addWidget(self.status_label)
         self.setLayout(outer_layout)
         self.show()
@@ -366,9 +414,53 @@ class App(QWidget):
             print(traceback.format_exc())
             self.display_warning(f"Could not load {fname}:\n{e}")
 
+    def update_confusion_matrix(self):
+        selected_roi_id = self.roi_combobox.currentData()
+
+        N = int(self.configs['confusion_matrix_N'])
+        if selected_roi_id is None:
+            for cm_row in range(N):
+                for cm_col in range(N):
+                    self.confusion_matrix_table.setItem(cm_row, cm_col, QTableWidgetItem(""))
+                    self.confusion_matrix_table.item(cm_row, cm_col).setBackground(QColor(255, 255, 255))
+        else:
+            mask = self.contours[selected_roi_id]
+            lower_q = np.quantile(self.planned_dose_ct[mask != 0], 1/N)
+            upper_q = np.quantile(self.planned_dose_ct[mask != 0], 1-1/N)
+            dose_levels = np.linspace(lower_q, upper_q, N-1)
+            self.confusion_matrix_table.setColumnCount(N)
+            self.confusion_matrix_table.setRowCount(N)
+            cm_vals, dd_vals = prepare_confusion_matrix(self.planned_dose_ct, self.measured_dose_ct, mask, dose_levels)
+            labels = [f"(0, {dose_levels[0]:.1f})"]
+            labels.extend([f"[{dose_levels[i]:.1f}, {dose_levels[i+1]:.1f})" for i in range(0, N-2)])
+            labels.append(f"[{dose_levels[-1]:.1f}, ∞)")
+            self.confusion_matrix_table.setHorizontalHeaderLabels(labels)
+            self.confusion_matrix_table.setVerticalHeaderLabels(labels)
+            lens = tuple((self.ct[0][i][2] - self.ct[0][i][1] for i in (0, 1, 2)))
+            vol = abs(lens[0] * lens[1] * lens[2] / 1000)
+            max_dd_color = 10
+            for cm_row in range(N):
+                for cm_col in range(N):
+                    cm_val = cm_vals[cm_row, cm_col]
+                    dd_val = dd_vals[cm_row, cm_col] * vol
+                    self.confusion_matrix_table.setItem(cm_row, cm_col, QTableWidgetItem(f"{cm_val:.4f}\n{dd_val:.2f}"))
+                    if dd_val >= 0:
+                        val = 255-min(255, int(255*(dd_val/max_dd_color)))
+                        color = QColor(255, val, val)
+                    else:
+                        val = 255-min(255, int(255*(-dd_val/max_dd_color)))
+                        color = QColor(val, val, 255)
+
+                    self.confusion_matrix_table.item(cm_row, cm_col).setBackground(color)
+
+        self.confusion_matrix_table.setWordWrap(True)
+        self.confusion_matrix_table.resizeColumnsToContents()
+        self.confusion_matrix_table.resizeRowsToContents()
+
     def update_roi_selection(self):
         self.update_dvh_plot()
         self.recalculate_plots_for_isodose()
+        self.update_confusion_matrix()
 
     def update_isodose_selection(self):
         self.recalculate_plots_for_isodose()

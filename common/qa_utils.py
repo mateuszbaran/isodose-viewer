@@ -136,3 +136,25 @@ def prepare_cold_val(planned_doses, measured_doses, mask, isodose, clip_low=-5.0
     vals[0, 0, 0] = clip_low
     vals[0, 0, 1] = 0.0
     return vals
+
+
+def prepare_confusion_matrix(planned_doses, measured_doses, mask, dose_levels):
+    N = len(dose_levels) + 1
+    cm = np.zeros((N, N))
+    dd = np.zeros((N, N))
+    for i in range(N):
+        for j in range(N):
+            lower_expected = -np.inf if i == 0 else dose_levels[i - 1]
+            upper_expected = np.inf if i == N-1 else dose_levels[i]
+            lower_measured = -np.inf if j == 0 else dose_levels[j - 1]
+            upper_measured = np.inf if j == N-1 else dose_levels[j]
+            planned_in_range = np.logical_and(planned_doses >= lower_expected, planned_doses < upper_expected)
+            measured_in_range = np.logical_and(measured_doses >= lower_measured, measured_doses < upper_measured)
+            cur_region = np.logical_and(np.logical_and(mask, planned_in_range), measured_in_range)
+            cm[j, i] = np.count_nonzero(cur_region)
+            dd[j, i] = np.sum(measured_doses[cur_region]) - np.sum(planned_doses[cur_region])
+            # dd[j, i] = dd[j, i]
+
+    # normalization
+    cm = cm / np.sum(cm)
+    return cm, dd

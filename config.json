@@ -26,5 +26,8 @@
     "lowerDoseCutoffPercent": 10,
     "maxGamma": 2.0
   },
-  "cacheLimitGB": 40
+  "cacheLimitGB": 40,
+  "confusion_matrix_N": 8,
+  "window_width": 1600,
+  "window_height": 950
 }
