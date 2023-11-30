@@ -553,28 +553,29 @@ class App(QWidget):
         selected_roi_id = self.roi_combobox.currentData()
         if selected_roi_id is not None:
             isodose_Gy = self.isodose_spinbox.value()
-            img_hot_cold = prepare_hot_cold_image(self.planned_dose_ct, self.measured_dose_ct,
-                                                  self.contours[selected_roi_id], isodose_Gy)
             roi_mask_layer = viewer.add_image(self.contours[selected_roi_id].astype(np.float32),
                                               name=f"ROI {self.roi_combobox.currentText()} Gy",
                                               opacity=0.8, scale=ct_scale, blending='additive', visible=False)
             roi_mask_layer.colormap = 'green', green
+            if self.planned_dose_ct is not None:
+                img_hot_cold = prepare_hot_cold_image(self.planned_dose_ct, self.measured_dose_ct,
+                                                      self.contours[selected_roi_id], isodose_Gy)
 
-            hot_cold_layer = viewer.add_image(img_hot_cold, name=f"Hot and cold areas for isodose {isodose_Gy} Gy",
-                                              opacity=0.9, rgb=True, scale=ct_scale, blending='additive')
+                hot_cold_layer = viewer.add_image(img_hot_cold, name=f"Hot and cold areas for isodose {isodose_Gy} Gy",
+                                                  opacity=0.9, rgb=True, scale=ct_scale, blending='additive')
 
-            img_hot_val = prepare_hot_val(self.planned_dose_ct, self.measured_dose_ct,
-                                          self.contours[selected_roi_id], isodose_Gy)
-            img_cold_val = prepare_cold_val(self.planned_dose_ct, self.measured_dose_ct,
-                                            self.contours[selected_roi_id], isodose_Gy)
-            cold_val_layer = viewer.add_image(img_cold_val,
-                                              name=f"Cold areas for isodose {isodose_Gy} Gy",
-                                              opacity=0.8, scale=ct_scale, blending='additive')
-            hot_val_layer = viewer.add_image(img_hot_val,
-                                             name=f"Hot areas for isodose {isodose_Gy} Gy",
-                                             opacity=0.8, scale=ct_scale, blending='additive')
-            hot_val_layer.colormap = 'red'
-            cold_val_layer.colormap = 'neg_blue', neg_blue
+                img_hot_val = prepare_hot_val(self.planned_dose_ct, self.measured_dose_ct,
+                                              self.contours[selected_roi_id], isodose_Gy)
+                img_cold_val = prepare_cold_val(self.planned_dose_ct, self.measured_dose_ct,
+                                                self.contours[selected_roi_id], isodose_Gy)
+                cold_val_layer = viewer.add_image(img_cold_val,
+                                                  name=f"Cold areas for isodose {isodose_Gy} Gy",
+                                                  opacity=0.8, scale=ct_scale, blending='additive')
+                hot_val_layer = viewer.add_image(img_hot_val,
+                                                 name=f"Hot areas for isodose {isodose_Gy} Gy",
+                                                 opacity=0.8, scale=ct_scale, blending='additive')
+                hot_val_layer.colormap = 'red'
+                cold_val_layer.colormap = 'neg_blue', neg_blue
 
         if self.gamma_full is not None:
             gamma_layer = viewer.add_image((self.gamma_full > 1.0).astype(np.float32),
