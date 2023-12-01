@@ -20,13 +20,101 @@ from common.dicom_tools import read_dicom_3d, read_tps_dose, draw_contours, disp
     rename_CTs_to_SOPInstanceUID, resample_doses_to_ct
 
 from common.qa_utils import calculate_dvh, calculate_hot_cold_vols, prepare_hot_cold_image, prepare_cold_val, \
-    prepare_hot_val, calculate_Dx, calculate_gpr_for_roi, prepare_confusion_matrix
+    prepare_hot_val, calculate_Dx, calculate_Vx, calculate_gpr_for_roi, prepare_confusion_matrix
 
 import vispy.color
 
 import numpy as np
 
 import pymedphys
+
+
+class QAStatWindow(QMainWindow):
+    def __init__(self, parent):
+        self.parent = parent
+        super(QAStatWindow, self).__init__(parent)
+
+        main_layout = QHBoxLayout()
+        self.setFixedSize(450, 550)
+
+        self.stat_table = QTableWidget(self)
+        self.stat_table.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        stat_column_headers = ["ROI name", "parameter", "value", "tolerance"]
+        self.stat_table.setColumnCount(len(stat_column_headers))
+        self.stat_table.setHorizontalHeaderLabels(stat_column_headers)
+        self.stat_table.setMinimumHeight(400)
+        self.stat_table.setMinimumWidth(400)
+        self.stat_table.setMaximumHeight(700)
+        self.setWindowTitle("QA Statistics")
+
+        self.specification = self.parent.configs["qa_specification"]
+        self.stat_table.setRowCount(len(self.specification))
+
+        for (i, (roi_name, calculation_type, threshold, tolerance_text)) in enumerate(self.specification):
+            threshold_unit = ""
+            if calculation_type == "Vrel":
+                threshold_unit = "%"
+            elif calculation_type == "Vabs":
+                threshold_unit = "cm³"
+            elif calculation_type == "Dmax":
+                threshold_unit = "Gy"
+
+            self.stat_table.setItem(i, 0, QTableWidgetItem(roi_name))
+            if calculation_type == "Dmax":
+                self.stat_table.setItem(i, 1, QTableWidgetItem(f"{calculation_type}"))
+            else:
+                self.stat_table.setItem(i, 1, QTableWidgetItem(f"{calculation_type} {threshold}{threshold_unit}"))
+            self.stat_table.setItem(i, 3, QTableWidgetItem(tolerance_text))
+
+        self.fill_table()
+
+        self.stat_table.resizeColumnsToContents()
+        self.stat_table.resizeRowsToContents()
+
+        main_layout.addWidget(self.stat_table)
+        self.setLayout(main_layout)
+
+    def fill_table(self):
+
+        for (i, (roi_name, calculation_type, threshold, tolerance_text)) in enumerate(self.specification):
+            roi_num = -1
+            for roi in self.parent.rois:
+                if roi[1] == roi_name:
+                    roi_num = roi[0]
+
+            if roi_num != -1:
+                mask = self.parent.contours[roi_num]
+                if calculation_type in ["Vrel", "Vabs"]:
+                    roi_v_perc, roi_v_cm3 = calculate_Vx(self.parent.get_voxel_volume_cm3(), mask,
+                                                         self.parent.measured_dose_ct, threshold)
+                    if calculation_type == "Vrel":
+                        txt = f"{roi_v_perc:.2f}%"
+                    else:
+                        txt = f"{roi_v_cm3:.2f} cm³"
+                    iw = QTableWidgetItem(txt)
+                elif calculation_type == "Dmax":
+                    Dmax = np.max(self.parent.measured_dose_ct[mask != 0])
+                    iw = QTableWidgetItem(f"{Dmax:.2f}Gy")
+
+                try:
+                    if calculation_type == "Vrel" and tolerance_text[:2] == "< " and tolerance_text[-1:] == "%":
+                        if roi_v_perc < float(tolerance_text[2:-1]):
+                            iw.setBackground(QColor(100, 255, 100))
+                        else:
+                            iw.setBackground(QColor(255, 100, 100))
+                    elif calculation_type == "Vabs" and tolerance_text[:2] == "< " and tolerance_text[-3:] == "cm³":
+                        if roi_v_cm3 < float(tolerance_text[2:-3]):
+                            iw.setBackground(QColor(100, 255, 100))
+                        else:
+                            iw.setBackground(QColor(255, 100, 100))
+                    elif calculation_type == "Dmax" and tolerance_text[:2] == "< " and tolerance_text[-2:] == "Gy":
+                        if Dmax < float(tolerance_text[2:-2]):
+                            iw.setBackground(QColor(100, 255, 100))
+                        else:
+                            iw.setBackground(QColor(255, 100, 100))
+                except Exception as e:
+                    print(e)
+                self.stat_table.setItem(i, 2, iw)
 
 
 def load_data(
@@ -245,6 +333,10 @@ class App(QWidget):
         button_browse_slices.setText("Browse slices")
         button_browse_slices.clicked.connect(self.browse_slices)
 
+        button_qa_stats = QPushButton(self)
+        button_qa_stats.setText("QA statistics")
+        button_qa_stats.clicked.connect(self.show_qa_statistics)
+
         self.roi_combobox = QComboBox(self)
         self.roi_combobox.addItem("Select ROI")
         self.roi_combobox.currentIndexChanged.connect(self.update_roi_selection)
@@ -304,6 +396,7 @@ class App(QWidget):
         grid_layout.addWidget(button_close_patient, 0, 5)
         grid_layout.addWidget(self.gamma_label, 1, 4)
         grid_layout.addWidget(button_browse_slices, 0, 6)
+        grid_layout.addWidget(button_qa_stats, 0, 7)
 
         mid_layout.addWidget(self.roi_combobox)
         mid_layout.addWidget(self.isodose_spinbox)
@@ -414,6 +507,11 @@ class App(QWidget):
             print(traceback.format_exc())
             self.display_warning(f"Could not load {fname}:\n{e}")
 
+    def get_voxel_volume_cm3(self):
+        lens = tuple((self.ct[0][i][2] - self.ct[0][i][1] for i in (0, 1, 2)))
+        vol = abs(lens[0] * lens[1] * lens[2] / 1000)
+        return vol
+
     def update_confusion_matrix(self):
         selected_roi_id = self.roi_combobox.currentData()
 
@@ -425,19 +523,18 @@ class App(QWidget):
                     self.confusion_matrix_table.item(cm_row, cm_col).setBackground(QColor(255, 255, 255))
         else:
             mask = self.contours[selected_roi_id]
-            lower_q = np.quantile(self.planned_dose_ct[mask != 0], 1/N)
-            upper_q = np.quantile(self.planned_dose_ct[mask != 0], 1-1/N)
-            dose_levels = np.linspace(lower_q, upper_q, N-1)
+            lower_q = np.quantile(self.planned_dose_ct[mask != 0], 1 / N)
+            upper_q = np.quantile(self.planned_dose_ct[mask != 0], 1 - 1 / N)
+            dose_levels = np.linspace(lower_q, upper_q, N - 1)
             self.confusion_matrix_table.setColumnCount(N)
             self.confusion_matrix_table.setRowCount(N)
             cm_vals, dd_vals = prepare_confusion_matrix(self.planned_dose_ct, self.measured_dose_ct, mask, dose_levels)
             labels = [f"(0, {dose_levels[0]:.1f})"]
-            labels.extend([f"[{dose_levels[i]:.1f}, {dose_levels[i+1]:.1f})" for i in range(0, N-2)])
+            labels.extend([f"[{dose_levels[i]:.1f}, {dose_levels[i + 1]:.1f})" for i in range(0, N - 2)])
             labels.append(f"[{dose_levels[-1]:.1f}, ∞)")
             self.confusion_matrix_table.setHorizontalHeaderLabels(labels)
             self.confusion_matrix_table.setVerticalHeaderLabels(labels)
-            lens = tuple((self.ct[0][i][2] - self.ct[0][i][1] for i in (0, 1, 2)))
-            vol = abs(lens[0] * lens[1] * lens[2] / 1000)
+            vol = self.get_voxel_volume_cm3()
             max_dd_color = 10
             for cm_row in range(N):
                 for cm_col in range(N):
@@ -445,10 +542,10 @@ class App(QWidget):
                     dd_val = dd_vals[cm_row, cm_col] * vol
                     self.confusion_matrix_table.setItem(cm_row, cm_col, QTableWidgetItem(f"{cm_val:.4f}\n{dd_val:.2f}"))
                     if dd_val >= 0:
-                        val = 255-min(255, int(255*(dd_val/max_dd_color)))
+                        val = 255 - min(255, int(255 * (dd_val / max_dd_color)))
                         color = QColor(255, val, val)
                     else:
-                        val = 255-min(255, int(255*(-dd_val/max_dd_color)))
+                        val = 255 - min(255, int(255 * (-dd_val / max_dd_color)))
                         color = QColor(val, val, 255)
 
                     self.confusion_matrix_table.item(cm_row, cm_col).setBackground(color)
@@ -510,6 +607,10 @@ class App(QWidget):
 
     def browse_slices(self):
         self.view_napari(self.ct[1], dose_measured=self.measured_dose_ct, dose_planned=self.planned_dose_ct)
+
+    def show_qa_statistics(self):
+        qa_stat_window = QAStatWindow(self)
+        qa_stat_window.show()
 
     def open_file_ct_clicked(self):
         fname = QFileDialog.getExistingDirectory(self, 'Open CT folder')

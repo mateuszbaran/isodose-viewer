@@ -90,6 +90,15 @@ def calculate_Dx(dose_hist, vol_hist, dx):
     return np.interp(dx, np.flip(vol_hist), np.flip(dose_hist))
 
 
+def calculate_Vx(px_vol_cm3, roi_mask, doses, dx):
+    """
+    Calculate dose relative volume (in %) and total volume (in cm^3) of ROI with dose equal to dx or more.
+    """
+    total_vol = len(np.where(roi_mask > 0)[0])
+    high_vol = len(np.where(np.logical_and(roi_mask, doses > dx))[0])
+    return 100 * high_vol / total_vol, high_vol * px_vol_cm3
+
+
 def calculate_hot_cold_vols(planned_doses, measured_doses, for_doses):
     hot_vols = []
     cold_vols = []

@@ -7,7 +7,10 @@
   "doseTol": 3,
   "distTol": 3,
   "DVHBins": 200,
-  "DVHRange": [0.0, 100.0],
+  "DVHRange": [
+    0.0,
+    100.0
+  ],
   "lower_percent_dose_cutoff": 20,
   "isodoseLevels": [
     61,
@@ -29,5 +32,114 @@
   "cacheLimitGB": 40,
   "confusion_matrix_N": 8,
   "window_width": 1600,
-  "window_height": 950
+  "window_height": 950,
+  "_qa_specification_comment_1": [
+    "qa_specification entry format: [roi_name, calculation_type, threshold, tolerance_text]",
+    "calculation_type: either Vrel (for relative volume in percent), Vabs (for abolute volume in cm³) or Dmax (for maximum dose)",
+    "threshold for Vrel/Vabs: calculate volume with dose higher than specified"
+  ],
+  "qa_specification": [
+    [
+      "BLADDER",
+      "Vrel",
+      45.0,
+      "< 50%"
+    ],
+    [
+      "BLADDER",
+      "Vrel",
+      70.0,
+      "< 15%"
+    ],
+    [
+      "FEMUR HEAD L",
+      "Vrel",
+      50.0,
+      "< 2%"
+    ],
+    [
+      "FEMUR HEAD L",
+      "Dmax",
+      "",
+      "< 52.5Gy"
+    ],
+    [
+      "FEMUR HEAD R",
+      "Vrel",
+      50.0,
+      "< 2%"
+    ],
+    [
+      "FEMUR HEAD R",
+      "Dmax",
+      "",
+      "< 52.5Gy"
+    ],
+    [
+      "RECTUM",
+      "Vrel",
+      45.0,
+      "< 50%"
+    ],
+    [
+      "RECTUM",
+      "Vrel",
+      60.0,
+      "< 35%"
+    ],
+    [
+      "RECTUM",
+      "Vrel",
+      65.0,
+      "< 25%"
+    ],
+    [
+      "RECTUM",
+      "Vrel",
+      70.0,
+      "< 15%"
+    ],
+    [
+      "RECTUM",
+      "Vabs",
+      72.0,
+      "< 10 cm³"
+    ],
+    [
+      "BOWELS",
+      "Vabs",
+      45.0,
+      "< 195 cm³"
+    ],
+    [
+      "BOWELS",
+      "Dmax",
+      "",
+      "52Gy or 62.5Gy"
+    ],
+    [
+      "PENILE BULB",
+      "Vrel",
+      50.0,
+      "< 50%"
+    ],
+    [
+      "Brainstem",
+      "Vrel",
+      20.0,
+      "< 50%"
+    ],
+    [
+      "Brainstem",
+      "Vabs",
+      20.0,
+      "< 10 cm³"
+    ],
+    [
+      "Brainstem",
+      "Dmax",
+      "",
+      "< 30Gy"
+    ]
+  ]
 }
