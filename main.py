@@ -95,6 +95,8 @@ class QAStatWindow(QMainWindow):
                 elif calculation_type == "Dmax":
                     Dmax = np.max(self.parent.measured_dose_ct[mask != 0])
                     iw = QTableWidgetItem(f"{Dmax:.2f}Gy")
+                else:
+                    raise Exception(f"Incorrect calculation_type: {calculation_type}")
 
                 try:
                     if calculation_type == "Vrel" and tolerance_text[:2] == "< " and tolerance_text[-1:] == "%":
