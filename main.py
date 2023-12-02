@@ -34,8 +34,14 @@ class QAStatWindow(QMainWindow):
         self.parent = parent
         super(QAStatWindow, self).__init__(parent)
 
-        main_layout = QHBoxLayout()
-        self.setFixedSize(450, 550)
+        main_layout = QVBoxLayout()
+
+        self.resize(500, 650)
+
+        self.qa_set_combobox = QComboBox(self)
+        for cs in self.parent.configs["qa_specification"]:
+            self.qa_set_combobox.addItem(cs["set_name"])
+        self.qa_set_combobox.currentIndexChanged.connect(self.update_set_selection)
 
         self.stat_table = QTableWidget(self)
         self.stat_table.setEditTriggers(QAbstractItemView.NoEditTriggers)
@@ -47,43 +53,59 @@ class QAStatWindow(QMainWindow):
         self.stat_table.setMaximumHeight(700)
         self.setWindowTitle("QA Statistics")
 
-        self.specification = self.parent.configs["qa_specification"]
-        self.stat_table.setRowCount(len(self.specification))
+        self.update_set_selection()
 
-        for (i, (roi_name, calculation_type, threshold, tolerance_text)) in enumerate(self.specification):
-            threshold_unit = ""
-            if calculation_type == "Vrel":
-                threshold_unit = "%"
-            elif calculation_type == "Vabs":
-                threshold_unit = "cm³"
-            elif calculation_type == "Dmax":
-                threshold_unit = "Gy"
+        cwid = QWidget(self)
+        main_layout.addWidget(self.qa_set_combobox)
+        main_layout.addWidget(self.stat_table)
+        cwid.setLayout(main_layout)
 
-            self.stat_table.setItem(i, 0, QTableWidgetItem(roi_name))
-            if calculation_type == "Dmax":
-                self.stat_table.setItem(i, 1, QTableWidgetItem(f"{calculation_type}"))
-            else:
-                self.stat_table.setItem(i, 1, QTableWidgetItem(f"{calculation_type} {threshold}{threshold_unit}"))
-            self.stat_table.setItem(i, 3, QTableWidgetItem(tolerance_text))
+        self.setCentralWidget(cwid)
+
+    def update_set_selection(self):
+        self.stat_table.clearContents()
+        selected_set_id = self.qa_set_combobox.currentIndex()
+        self.current_specification = self.parent.configs["qa_specification"][selected_set_id]["constraints"]
+        self.stat_table.setRowCount(len(self.current_specification))
+
+        for (i, spec) in enumerate(self.current_specification):
+            try:
+                (roi_name, calculation_type, threshold, tolerance_text) = spec
+                self.stat_table.setItem(i, 0, QTableWidgetItem(str(roi_name)))
+                if calculation_type in ["Dmax", "Dmean"]:
+                    self.stat_table.setItem(i, 1, QTableWidgetItem(f"{calculation_type}"))
+                else:
+                    self.stat_table.setItem(i, 1, QTableWidgetItem(f"{calculation_type} {threshold}Gy"))
+                self.stat_table.setItem(i, 3, QTableWidgetItem(tolerance_text))
+            except Exception as e:
+                print(f"Error while processing {spec}")
+                print(e)
 
         self.fill_table()
-
         self.stat_table.resizeColumnsToContents()
         self.stat_table.resizeRowsToContents()
 
-        main_layout.addWidget(self.stat_table)
-        self.setLayout(main_layout)
+    def accept_roi(self, roi_name, roi_name_spec):
+        if isinstance(roi_name_spec, str):
+            return roi_name == roi_name_spec
+        elif isinstance(roi_name_spec, list):
+            return roi_name in roi_name_spec
+        else:
+            raise Exception(f"Wrong roi name spec: {roi_name_spec}")
 
     def fill_table(self):
-
-        for (i, (roi_name, calculation_type, threshold, tolerance_text)) in enumerate(self.specification):
-            roi_num = -1
+        for (i, (roi_name, calculation_type, threshold, tolerance_text)) in enumerate(self.current_specification):
+            roi_nums = []
             for roi in self.parent.rois:
-                if roi[1] == roi_name:
-                    roi_num = roi[0]
+                if self.accept_roi(roi[1], roi_name):
+                    roi_nums.append(roi[0])
 
-            if roi_num != -1:
-                mask = self.parent.contours[roi_num]
+            if len(roi_nums) > 0:
+                mask_list = [self.parent.contours[x] for x in roi_nums]
+                if len(mask_list) == 1:
+                    mask = mask_list[0]
+                else:
+                    mask = np.logical_or(*mask_list)
                 if calculation_type in ["Vrel", "Vabs"]:
                     roi_v_perc, roi_v_cm3 = calculate_Vx(self.parent.get_voxel_volume_cm3(), mask,
                                                          self.parent.measured_dose_ct, threshold)
@@ -95,6 +117,9 @@ class QAStatWindow(QMainWindow):
                 elif calculation_type == "Dmax":
                     Dmax = np.max(self.parent.measured_dose_ct[mask != 0])
                     iw = QTableWidgetItem(f"{Dmax:.2f}Gy")
+                elif calculation_type == "Dmean":
+                    Dmean = np.mean(self.parent.measured_dose_ct[mask != 0])
+                    iw = QTableWidgetItem(f"{Dmean:.2f}Gy")
                 else:
                     raise Exception(f"Incorrect calculation_type: {calculation_type}")
 
@@ -114,10 +139,14 @@ class QAStatWindow(QMainWindow):
                             iw.setBackground(QColor(100, 255, 100))
                         else:
                             iw.setBackground(QColor(255, 100, 100))
+                    elif calculation_type == "Dmean" and tolerance_text[:2] == "< " and tolerance_text[-2:] == "Gy":
+                        if Dmean < float(tolerance_text[2:-2]):
+                            iw.setBackground(QColor(100, 255, 100))
+                        else:
+                            iw.setBackground(QColor(255, 100, 100))
                 except Exception as e:
                     print(e)
                 self.stat_table.setItem(i, 2, iw)
-
 
 def load_data(
         ct_fname='/home/mateusz/Desktop/tmp/isodose-data/CT.nii.gz',

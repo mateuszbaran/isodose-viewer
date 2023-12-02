@@ -35,111 +35,561 @@
   "window_height": 950,
   "_qa_specification_comment_1": [
     "qa_specification entry format: [roi_name, calculation_type, threshold, tolerance_text]",
-    "calculation_type: either Vrel (for relative volume in percent), Vabs (for abolute volume in cm³) or Dmax (for maximum dose)",
+    "roi_name can either be a single name or a list of names, meaning their sum",
+    "calculation_type: either Vrel (for relative volume in percent), Vabs (for abolute volume in cm³), Dmax (for maximum dose) or Dmean (for mean dose)",
     "threshold for Vrel/Vabs: calculate volume with dose higher than specified"
   ],
   "qa_specification": [
-    [
-      "BLADDER",
-      "Vrel",
-      45.0,
-      "< 50%"
-    ],
-    [
-      "BLADDER",
-      "Vrel",
-      70.0,
-      "< 15%"
-    ],
-    [
-      "FEMUR HEAD L",
-      "Vrel",
-      50.0,
-      "< 2%"
-    ],
-    [
-      "FEMUR HEAD L",
-      "Dmax",
-      "",
-      "< 52.5Gy"
-    ],
-    [
-      "FEMUR HEAD R",
-      "Vrel",
-      50.0,
-      "< 2%"
-    ],
-    [
-      "FEMUR HEAD R",
-      "Dmax",
-      "",
-      "< 52.5Gy"
-    ],
-    [
-      "RECTUM",
-      "Vrel",
-      45.0,
-      "< 50%"
-    ],
-    [
-      "RECTUM",
-      "Vrel",
-      60.0,
-      "< 35%"
-    ],
-    [
-      "RECTUM",
-      "Vrel",
-      65.0,
-      "< 25%"
-    ],
-    [
-      "RECTUM",
-      "Vrel",
-      70.0,
-      "< 15%"
-    ],
-    [
-      "RECTUM",
-      "Vabs",
-      72.0,
-      "< 10 cm³"
-    ],
-    [
-      "BOWELS",
-      "Vabs",
-      45.0,
-      "< 195 cm³"
-    ],
-    [
-      "BOWELS",
-      "Dmax",
-      "",
-      "52Gy or 62.5Gy"
-    ],
-    [
-      "PENILE BULB",
-      "Vrel",
-      50.0,
-      "< 50%"
-    ],
-    [
-      "Brainstem",
-      "Vrel",
-      20.0,
-      "< 50%"
-    ],
-    [
-      "Brainstem",
-      "Vabs",
-      20.0,
-      "< 10 cm³"
-    ],
-    [
-      "Brainstem",
-      "Dmax",
-      "",
-      "< 30Gy"
-    ]
+    {
+      "set_name": "PIERŚ – ŁAGODNE HIPOFRACJONOWANIE (df 2.25-2.75 Gy)",
+      "constraints": [
+        [
+          "HEART",
+          "Vrel",
+          35.0,
+          "< 5%"
+        ],
+        [
+          "HEART",
+          "Vrel",
+          17.0,
+          "< 10%"
+        ],
+        [
+          "LUNG L",
+          "Vrel",
+          25.0,
+          "< 17%"
+        ],
+        [
+          "LUNG L",
+          "Dmean",
+          "",
+          "< 16Gy"
+        ],
+        [
+          "LUNG R",
+          "Vrel",
+          25.0,
+          "< 17%"
+        ],
+        [
+          "LUNG R",
+          "Dmean",
+          "",
+          "< 16Gy"
+        ],
+        [
+          [
+            "LUNG L",
+            "LUNG R"
+          ],
+          "Vrel",
+          20.0,
+          "< 17%"
+        ],
+        [
+          [
+            "LUNG L",
+            "LUNG R"
+          ],
+          "Dmean",
+          "",
+          "< 11Gy"
+        ],
+        [
+          "LAD",
+          "Dmax",
+          "",
+          "< 17Gy"
+        ]
+      ]
+    },
+    {
+      "set_name": "PROSTATA – FRAKCJONOWANIE KONWENCJONALNE (leczenie do >70Gy)",
+      "constraints": [
+        [
+          "BLADDER",
+          "Vrel",
+          45.0,
+          "< 50%"
+        ],
+        [
+          "BLADDER",
+          "Vrel",
+          70.0,
+          "< 15%"
+        ],
+        [
+          "FEMUR HEAD L",
+          "Vrel",
+          50.0,
+          "< 2%"
+        ],
+        [
+          "FEMUR HEAD L",
+          "Dmax",
+          "",
+          "< 52.5Gy"
+        ],
+        [
+          "FEMUR HEAD R",
+          "Vrel",
+          50.0,
+          "< 2%"
+        ],
+        [
+          "FEMUR HEAD R",
+          "Dmax",
+          "",
+          "< 52.5Gy"
+        ],
+        [
+          "RECTUM",
+          "Vrel",
+          45.0,
+          "< 50%"
+        ],
+        [
+          "RECTUM",
+          "Vrel",
+          60.0,
+          "< 35%"
+        ],
+        [
+          "RECTUM",
+          "Vrel",
+          65.0,
+          "< 25%"
+        ],
+        [
+          "RECTUM",
+          "Vrel",
+          70.0,
+          "< 15%"
+        ],
+        [
+          "RECTUM",
+          "Vabs",
+          72.0,
+          "< 10 cm³"
+        ],
+        [
+          "BOWELS",
+          "Vabs",
+          45.0,
+          "< 195 cm³"
+        ],
+        [
+          "BOWELS",
+          "Dmax",
+          "",
+          "52Gy or 62.5Gy"
+        ],
+        [
+          "PENILE BULB",
+          "Vrel",
+          50.0,
+          "< 50%"
+        ]
+      ]
+    },
+    {
+      "set_name": "PROSTATA – FRAKCJONOWANIE KONWENCJONALNE + BRACHY (50 Gy tele)",
+      "constraints": [
+        [
+          "BLADDER",
+          "Vrel",
+          50.0,
+          "< 10%"
+        ],
+        [
+          "BLADDER",
+          "Vrel",
+          40.0,
+          "< 50%"
+        ],
+        [
+          "FEMUR HEAD L",
+          "Vrel",
+          50.0,
+          "< 2%"
+        ],
+        [
+          "FEMUR HEAD L",
+          "Dmax",
+          "",
+          "< 50Gy"
+        ],
+        [
+          "FEMUR HEAD R",
+          "Vrel",
+          50.0,
+          "< 2%"
+        ],
+        [
+          "FEMUR HEAD R",
+          "Dmax",
+          "",
+          "< 50Gy"
+        ],
+        [
+          "RECTUM",
+          "Vrel",
+          50.0,
+          "< 5%"
+        ],
+        [
+          "RECTUM",
+          "Vrel",
+          40.0,
+          "< 35%"
+        ],
+        [
+          "BOWELS",
+          "Vabs",
+          45.0,
+          "< 195 cm³"
+        ],
+        [
+          "BOWELS",
+          "Dmax",
+          "",
+          "52Gy or 62.5Gy"
+        ],
+        [
+          "PENILE BULB",
+          "Vrel",
+          50.0,
+          "< 50%"
+        ]
+      ]
+    },
+    {
+      "set_name": "RAK TRZONU/SZYJKI MACICY",
+      "constraints": [
+        [
+          "BLADDER",
+          "Vrel",
+          45.0,
+          "< 50%"
+        ],
+        [
+          "FEMUR HEAD L",
+          "Vrel",
+          30.0,
+          "< 15%"
+        ],
+        [
+          "FEMUR HEAD r",
+          "Vrel",
+          30.0,
+          "< 15%"
+        ],
+        [
+          "BOWELS",
+          "Vabs",
+          45.0,
+          "< 200 cm³ (< 250 cm³ – obligatoryjnie)"
+        ],
+        [
+          "BOWELS",
+          "Vabs",
+          55.0,
+          "< 5 cm³ – w przypadku boostu w obrębie węzłów chłonnych (< 15 cm³ obligatoryjnie)"
+        ],
+        [
+          "KIDNEY_R",
+          "Dmean",
+          "",
+          "< 10Gy"
+        ],
+        [
+          "KIDNEY_L",
+          "Dmean",
+          "",
+          "< 10Gy"
+        ],
+        [
+          "DUODENUM",
+          "Vabs",
+          55.0,
+          "< 5 cm³ (< 15 cm³ obligatoryjnie)"
+        ],
+        [
+          "SPINAL_CORD",
+          "Dmax",
+          "",
+          "< 45Gy"
+        ]
+      ]
+    },
+    {
+      "set_name": "RAK PŁUCA",
+      "constraints": [
+        [
+          "HEART",
+          "Dmean",
+          "",
+          "< 20 Gy"
+        ],
+        [
+          "HEART",
+          "Vrel",
+          46.0,
+          "< 25%"
+        ],
+        [
+          [
+            "LUNG L",
+            "LUNG R"
+          ],
+          "Vrel",
+          20.0,
+          "< 35%"
+        ],
+        [
+          [
+            "LUNG L",
+            "LUNG R"
+          ],
+          "Dmean",
+          "",
+          "< 20Gy"
+        ],
+        [
+          "SPINAL CANAL",
+          "Dmax",
+          "",
+          "< 46 Gy"
+        ],
+        [
+          "SPINAL CORD",
+          "Dmax",
+          "",
+          "< 46 Gy"
+        ],
+        [
+          "ESOPHAGUS",
+          "Dmean",
+          "",
+          "< 32 Gy"
+        ],
+        [
+          "ESOPHAGUS",
+          "Vrel",
+          60.0,
+          "< 17%"
+        ],
+        [
+          "ESOPHAGUS",
+          "Dmax",
+          "",
+          "≤ 105 % dawki przepisanej"
+        ],
+        [
+          "BRACHIAL_PLEXUS",
+          "Dmax",
+          "",
+          "< 66Gy"
+        ]
+      ]
+    },
+    {
+      "set_name": "PROSTATA – HIPOFRAKCJONOWANIE (df 2.5 Gy)",
+      "constraints": [
+        [
+          "BLADDER",
+          "Vrel",
+          45.0,
+          "< 45%"
+        ],
+        [
+          "BLADDER",
+          "Vrel",
+          55.0,
+          "< 25%"
+        ],
+        [
+          "BLADDER",
+          "Vrel",
+          65.0,
+          "< 15%"
+        ],
+        [
+          "FEMUR HEAD L",
+          "Vrel",
+          50.0,
+          "< 1%"
+        ],
+        [
+          "FEMUR HEAD L",
+          "Dmax",
+          "",
+          "< 52.5Gy"
+        ],
+        [
+          "FEMUR HEAD R",
+          "Vrel",
+          50.0,
+          "< 1%"
+        ],
+        [
+          "FEMUR HEAD R",
+          "Dmax",
+          "",
+          "< 52.5Gy"
+        ],
+        [
+          "RECTUM",
+          "Vrel",
+          45.0,
+          "< 45%"
+        ],
+        [
+          "RECTUM",
+          "Vrel",
+          55.0,
+          "< 25%"
+        ],
+        [
+          "RECTUM",
+          "Vrel",
+          65.0,
+          "< 15%"
+        ],
+        [
+          "RECTUM",
+          "Vabs",
+          65.0,
+          "< 10 cm³"
+        ],
+        [
+          "BOWELS",
+          "Vabs",
+          45.0,
+          "< 150 cm³"
+        ],
+        [
+          "BOWELS",
+          "Vabs",
+          52.0,
+          "< 100 cm³"
+        ],
+        [
+          "BOWELS",
+          "Dmax",
+          "",
+          "52Gy or 55Gy"
+        ]
+      ]
+    },
+    {
+      "set_name": "GŁOWA I SZYJA",
+      "constraints": []
+    },
+    {
+      "set_name": "RAK ODBYTNICY – FRAKCJONOWANIE KONWENCJONALNE",
+      "constraints": [
+        [
+          "BLADDER",
+          "Vrel",
+          40.0,
+          "< 40%"
+        ],
+        [
+          "BLADDER",
+          "Vabs",
+          45.0,
+          "< 65cm³"
+        ],
+        [
+          "FEMUR HEAD L",
+          "Vrel",
+          25.0,
+          "< 45%"
+        ],
+        [
+          "FEMUR HEAD L",
+          "Vrel",
+          40.0,
+          "< 40%"
+        ],
+        [
+          "FEMUR HEAD R",
+          "Vrel",
+          25.0,
+          "< 45%"
+        ],
+        [
+          "FEMUR HEAD R",
+          "Vrel",
+          40.0,
+          "< 40%"
+        ],
+        [
+          "BOWELS",
+          "Vabs",
+          35.0,
+          "< 180 cm³"
+        ],
+        [
+          "BOWELS",
+          "Vabs",
+          40.0,
+          "< 100 cm³"
+        ],
+        [
+          "BOWELS",
+          "Vabs",
+          45.0,
+          "< 65 cm³"
+        ]
+      ]
+    },
+    {
+      "set_name": "TEST SET",
+      "constraints": [
+        [
+          "Brainstem",
+          "Vrel",
+          20.0,
+          "< 50%"
+        ],
+        [
+          "Brainstem",
+          "Vrel",
+          15.0,
+          "< 20%"
+        ],
+        [
+          "Brainstem",
+          "Vabs",
+          20.0,
+          "< 10 cm³"
+        ],
+        [
+          "Brainstem",
+          "Dmax",
+          "",
+          "< 30Gy"
+        ],
+        [
+          "Brainstem",
+          "Dmean",
+          "",
+          "< 15Gy"
+        ],
+        [
+          [
+            "Brainstem",
+            "Cord1"
+          ],
+          "Dmean",
+          "",
+          "< 12Gy"
+        ]
+      ]
+    }
   ]
 }
