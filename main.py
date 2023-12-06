@@ -224,7 +224,7 @@ class App(QWidget):
 
     def load_config(self):
         config_fname = 'config.json'
-        with open(config_fname, 'r') as config_file:
+        with open(config_fname, 'r', encoding='utf-8') as config_file:
             self.configs = json.load(config_file)
 
     def load_cache(self):
