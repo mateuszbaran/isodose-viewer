@@ -43,7 +43,7 @@ def get_seqs(dicom_rs, roid_id, path_to_ct):
         points[2, :] = zpos
         point_seqs.append(points)
 
-    return point_seqs
+    return np.concatenate(point_seqs, axis=1)
 
 
 def export_shapes():
@@ -58,7 +58,7 @@ def export_shapes():
                 struct_dcm = pydicom.dcmread(dir + rs_fname)
                 rois = display_structure_ids_ds(struct_dcm)
                 for roi in rois:
-                    if roi not in roi_data.keys():
+                    if roi[1] not in roi_data.keys():
                         roi_data[roi[1]] = {}
                     if p not in roi_data[roi[1]].keys():
                         roi_data[roi[1]][p] = {}
@@ -72,3 +72,20 @@ def export_shapes():
 
 
 roi_data = export_shapes()
+
+
+def save_shapes(roi_data):
+    for roi_name, patients in roi_data.items():
+        dir = f"/home/mateusz/Desktop/tmp/sco/export/{roi_name}/"
+        if not os.path.isdir(dir):
+            os.mkdir(dir)
+        for pi, pdata in patients.items():
+            for fi, fdata in pdata.items():
+                fname = f"{dir}p_{pi:02d}_f{fi:02d}.csv"
+                try:
+                    np.savetxt(fname, fdata, delimiter=";")
+                except Exception as e:
+                    print(e)
+
+
+save_shapes(roi_data)
