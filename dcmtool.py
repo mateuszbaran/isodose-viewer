@@ -83,7 +83,7 @@ def save_shapes(roi_data):
             for fi, fdata in pdata.items():
                 fname = f"{dir}p_{pi:02d}_f{fi:02d}.csv"
                 try:
-                    np.savetxt(fname, fdata, delimiter=";")
+                    np.savetxt(fname, fdata.T, delimiter=";")
                 except Exception as e:
                     print(e)
 
