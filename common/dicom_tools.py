@@ -95,6 +95,21 @@ def display_structure_ids_ds(ds):
     return roi_numbers
 
 
+def ct_transform_matrix(dic_image):
+    M = np.zeros((3, 3), dtype=np.float32)
+    iop = dic_image[0x0020, 0x0037]
+    ipp = dic_image[0x0020, 0x0032]
+    pxs = dic_image[0x0028, 0x0030]
+    M[0, 0] = iop.value[1] * pxs.value[0]
+    M[1, 0] = iop.value[0] * pxs.value[0]
+    M[0, 1] = iop.value[4] * pxs.value[1]
+    M[1, 1] = iop.value[3] * pxs.value[1]
+    M[0, 2] = ipp.value[0]
+    M[1, 2] = ipp.value[1]
+    M[2, 2] = 1.0
+    M = np.linalg.inv(M)
+    return M
+
 # Creates volume corresponding to a structure with struct_id
 # Returns 3D image with black pixels correcsponding to background and pixels labeled with ds.StructureSetROISequence[struct_id].ROINumber
 # corresponding to the structure of interest
@@ -121,15 +136,7 @@ def draw_contours(im_size, roid_id, path_to_ct, dicom_rs):
     for seq in ROI:
         dic_image = pydicom.dcmread(path_to_ct + '/CT.' + seq.ContourImageSequence[0].ReferencedSOPInstanceUID + '.dcm')
 
-        M = np.zeros((3, 3), dtype=np.float32)
-        M[0, 0] = dic_image[0x0020, 0x0037].value[1] * dic_image[0x0028, 0x0030].value[0]
-        M[1, 0] = dic_image[0x0020, 0x0037].value[0] * dic_image[0x0028, 0x0030].value[0]
-        M[0, 1] = dic_image[0x0020, 0x0037].value[4] * dic_image[0x0028, 0x0030].value[1]
-        M[1, 1] = dic_image[0x0020, 0x0037].value[3] * dic_image[0x0028, 0x0030].value[1]
-        M[0, 2] = dic_image[0x0020, 0x0032].value[0]
-        M[1, 2] = dic_image[0x0020, 0x0032].value[1]
-        M[2, 2] = 1.0
-        M = np.linalg.inv(M)
+        M = ct_transform_matrix(dic_image)
         points = np.swapaxes(np.reshape(seq.ContourData, (-1, 3)), 0, 1)
         points[2, :].fill(1)
         points = np.dot(M, points)[:2, :]
