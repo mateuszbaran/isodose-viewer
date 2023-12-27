@@ -7,7 +7,8 @@ import diskcache as dc
 import traceback
 
 from PyQt5.QtWidgets import QApplication, QMainWindow, QWidget, QPushButton, QFileDialog, QMessageBox, QGridLayout, \
-    QLabel, QVBoxLayout, QHBoxLayout, QComboBox, QDoubleSpinBox, QTableWidget, QTableWidgetItem, QAbstractItemView
+    QLabel, QVBoxLayout, QHBoxLayout, QComboBox, QDoubleSpinBox, QTableWidget, QTableWidgetItem, QAbstractItemView, \
+    QLineEdit
 
 from PyQt5 import QtCore, QtGui
 from PyQt5.QtGui import QColor, QPainter
@@ -39,25 +40,37 @@ class QAStatWindow(QMainWindow):
         self.resize(500, 650)
 
         self.qa_set_combobox = QComboBox(self)
-        for cs in self.parent.configs["qa_specification"]:
+        for cs in self.parent.qaspec["qa_specification"]:
             self.qa_set_combobox.addItem(cs["set_name"])
         self.qa_set_combobox.currentIndexChanged.connect(self.update_set_selection)
 
         self.stat_table = QTableWidget(self)
         self.stat_table.setEditTriggers(QAbstractItemView.NoEditTriggers)
-        stat_column_headers = ["ROI name", "parameter", "value", "tolerance"]
+        stat_column_headers = ["ROI name", "parameter", "value (plan)", "value (QA)", "tolerance"]
         self.stat_table.setColumnCount(len(stat_column_headers))
         self.stat_table.setHorizontalHeaderLabels(stat_column_headers)
-        self.stat_table.setMinimumHeight(400)
-        self.stat_table.setMinimumWidth(400)
-        self.stat_table.setMaximumHeight(700)
+        self.stat_table.setMinimumHeight(500)
+        self.stat_table.setMinimumWidth(450)
+        self.stat_table.setMaximumHeight(750)
         self.setWindowTitle("QA Statistics")
 
+        alt_names_label = QLabel("Alternative ROI names (separate using semicolons)")
+        self.alternative_name_roi_selector = QComboBox(self)
+        for arn in self.parent.qaspec["alternative_roi_names"]:
+            self.alternative_name_roi_selector.addItem(arn["main_name"])
+        self.alternative_name_roi_selector.currentIndexChanged.connect(self.update_alt_name_selector)
+        self.alt_names_edit = QLineEdit(self)
+        self.alt_names_edit.editingFinished.connect(self.handle_alt_name_editing_finished)
+
         self.update_set_selection()
+        self.update_alt_name_selector()
 
         cwid = QWidget(self)
         main_layout.addWidget(self.qa_set_combobox)
         main_layout.addWidget(self.stat_table)
+        main_layout.addWidget(alt_names_label)
+        main_layout.addWidget(self.alternative_name_roi_selector)
+        main_layout.addWidget(self.alt_names_edit)
         cwid.setLayout(main_layout)
 
         self.setCentralWidget(cwid)
@@ -65,7 +78,7 @@ class QAStatWindow(QMainWindow):
     def update_set_selection(self):
         self.stat_table.clearContents()
         selected_set_id = self.qa_set_combobox.currentIndex()
-        self.current_specification = self.parent.configs["qa_specification"][selected_set_id]["constraints"]
+        self.current_specification = self.parent.qaspec["qa_specification"][selected_set_id]["constraints"]
         self.stat_table.setRowCount(len(self.current_specification))
 
         for (i, spec) in enumerate(self.current_specification):
@@ -76,7 +89,7 @@ class QAStatWindow(QMainWindow):
                     self.stat_table.setItem(i, 1, QTableWidgetItem(f"{calculation_type}"))
                 else:
                     self.stat_table.setItem(i, 1, QTableWidgetItem(f"{calculation_type} {threshold}Gy"))
-                self.stat_table.setItem(i, 3, QTableWidgetItem(tolerance_text))
+                self.stat_table.setItem(i, 4, QTableWidgetItem(tolerance_text))
             except Exception as e:
                 print(f"Error while processing {spec}")
                 print(e)
@@ -85,68 +98,89 @@ class QAStatWindow(QMainWindow):
         self.stat_table.resizeColumnsToContents()
         self.stat_table.resizeRowsToContents()
 
+    def update_alt_name_selector(self):
+        selected_id = self.alternative_name_roi_selector.currentIndex()
+        self.alt_names_edit.setText(self.parent.qaspec["alternative_roi_names"][selected_id]["alternatives"])
+
+    def handle_alt_name_editing_finished(self):
+        selected_id = self.alternative_name_roi_selector.currentIndex()
+        self.parent.qaspec["alternative_roi_names"][selected_id]["alternatives"] = self.alt_names_edit.text()
+        with open(self.parent.qaspec_fname, 'w', encoding='utf-8') as qaspec_file:
+            json.dump(self.parent.qaspec, qaspec_file, ensure_ascii=False, indent=2)
+        print("saving alternative names successful")
+
+    def match_roi_names(self, roi_name_base, roi_name_cmp):
+        ismatch = roi_name_base.lower() == roi_name_cmp.lower()
+        for arn in self.parent.qaspec["alternative_roi_names"]:
+            if arn["main_name"] == roi_name_base:
+                for altn in arn["alternatives"].split(';'):
+                    ismatch = ismatch or altn.lower() == roi_name_cmp.lower()
+        return ismatch
+
     def accept_roi(self, roi_name, roi_name_spec):
         if isinstance(roi_name_spec, str):
-            return roi_name == roi_name_spec
+            return self.match_roi_names(roi_name_spec, roi_name)
         elif isinstance(roi_name_spec, list):
-            return roi_name in roi_name_spec
+            return any([self.match_roi_names(rn, roi_name) for rn in roi_name_spec])
         else:
             raise Exception(f"Wrong roi name spec: {roi_name_spec}")
 
     def fill_table(self):
-        for (i, (roi_name, calculation_type, threshold, tolerance_text)) in enumerate(self.current_specification):
-            roi_nums = []
-            for roi in self.parent.rois:
-                if self.accept_roi(roi[1], roi_name):
-                    roi_nums.append(roi[0])
+        for (tid, dose_dist) in [(2, self.parent.planned_dose_ct), (3, self.parent.measured_dose_ct)]:
+            for (i, (roi_name, calculation_type, threshold, tolerance_text)) in enumerate(self.current_specification):
+                roi_nums = []
+                for roi in self.parent.rois:
+                    if self.accept_roi(roi[1], roi_name):
+                        roi_nums.append(roi[0])
 
-            if len(roi_nums) > 0:
-                mask_list = [self.parent.contours[x] for x in roi_nums]
-                if len(mask_list) == 1:
-                    mask = mask_list[0]
-                else:
-                    mask = np.logical_or(*mask_list)
-                if calculation_type in ["Vrel", "Vabs"]:
-                    roi_v_perc, roi_v_cm3 = calculate_Vx(self.parent.get_voxel_volume_cm3(), mask,
-                                                         self.parent.measured_dose_ct, threshold)
-                    if calculation_type == "Vrel":
-                        txt = f"{roi_v_perc:.2f}%"
+                if len(roi_nums) > 0:
+                    mask_list = [self.parent.contours[x] for x in roi_nums]
+                    if len(mask_list) == 1:
+                        mask = mask_list[0]
                     else:
-                        txt = f"{roi_v_cm3:.2f} cm³"
-                    iw = QTableWidgetItem(txt)
-                elif calculation_type == "Dmax":
-                    Dmax = np.max(self.parent.measured_dose_ct[mask != 0])
-                    iw = QTableWidgetItem(f"{Dmax:.2f}Gy")
-                elif calculation_type == "Dmean":
-                    Dmean = np.mean(self.parent.measured_dose_ct[mask != 0])
-                    iw = QTableWidgetItem(f"{Dmean:.2f}Gy")
-                else:
-                    raise Exception(f"Incorrect calculation_type: {calculation_type}")
+                        mask = np.logical_or(*mask_list)
+                    if calculation_type in ["Vrel", "Vabs"]:
+                        roi_v_perc, roi_v_cm3 = calculate_Vx(self.parent.get_voxel_volume_cm3(), mask,
+                                                             dose_dist, threshold)
+                        if calculation_type == "Vrel":
+                            txt = f"{roi_v_perc:.2f}%"
+                        else:
+                            txt = f"{roi_v_cm3:.2f} cm³"
+                        iw = QTableWidgetItem(txt)
+                    elif calculation_type == "Dmax":
+                        Dmax = np.max(dose_dist[mask != 0])
+                        iw = QTableWidgetItem(f"{Dmax:.2f}Gy")
+                    elif calculation_type == "Dmean":
+                        Dmean = np.mean(dose_dist[mask != 0])
+                        iw = QTableWidgetItem(f"{Dmean:.2f}Gy")
+                    else:
+                        raise Exception(f"Incorrect calculation_type: {calculation_type}")
 
-                try:
-                    if calculation_type == "Vrel" and tolerance_text[:2] == "< " and tolerance_text[-1:] == "%":
-                        if roi_v_perc < float(tolerance_text[2:-1]):
-                            iw.setBackground(QColor(100, 255, 100))
-                        else:
-                            iw.setBackground(QColor(255, 100, 100))
-                    elif calculation_type == "Vabs" and tolerance_text[:2] == "< " and tolerance_text[-3:] == "cm³":
-                        if roi_v_cm3 < float(tolerance_text[2:-3]):
-                            iw.setBackground(QColor(100, 255, 100))
-                        else:
-                            iw.setBackground(QColor(255, 100, 100))
-                    elif calculation_type == "Dmax" and tolerance_text[:2] == "< " and tolerance_text[-2:] == "Gy":
-                        if Dmax < float(tolerance_text[2:-2]):
-                            iw.setBackground(QColor(100, 255, 100))
-                        else:
-                            iw.setBackground(QColor(255, 100, 100))
-                    elif calculation_type == "Dmean" and tolerance_text[:2] == "< " and tolerance_text[-2:] == "Gy":
-                        if Dmean < float(tolerance_text[2:-2]):
-                            iw.setBackground(QColor(100, 255, 100))
-                        else:
-                            iw.setBackground(QColor(255, 100, 100))
-                except Exception as e:
-                    print(e)
-                self.stat_table.setItem(i, 2, iw)
+                    try:
+                        if calculation_type == "Vrel" and tolerance_text[:2] == "< " and tolerance_text[-1:] == "%":
+                            if roi_v_perc < float(tolerance_text[2:-1]):
+                                iw.setBackground(QColor(100, 255, 100))
+                            else:
+                                iw.setBackground(QColor(255, 100, 100))
+                        elif calculation_type == "Vabs" and tolerance_text[:2] == "< " and tolerance_text[-3:] == "cm³":
+                            if roi_v_cm3 < float(tolerance_text[2:-3]):
+                                iw.setBackground(QColor(100, 255, 100))
+                            else:
+                                iw.setBackground(QColor(255, 100, 100))
+                        elif calculation_type == "Dmax" and tolerance_text[:2] == "< " and tolerance_text[-2:] == "Gy":
+                            if Dmax < float(tolerance_text[2:-2]):
+                                iw.setBackground(QColor(100, 255, 100))
+                            else:
+                                iw.setBackground(QColor(255, 100, 100))
+                        elif calculation_type == "Dmean" and tolerance_text[:2] == "< " and tolerance_text[-2:] == "Gy":
+                            if Dmean < float(tolerance_text[2:-2]):
+                                iw.setBackground(QColor(100, 255, 100))
+                            else:
+                                iw.setBackground(QColor(255, 100, 100))
+                    except Exception as e:
+                        print(e)
+                    self.stat_table.setItem(i, tid, iw)
+
 
 def load_data(
         ct_fname='/home/mateusz/Desktop/tmp/isodose-data/CT.nii.gz',
@@ -190,6 +224,7 @@ class VerticalLabel(QLabel):
 class App(QWidget):
     def __init__(self):
         super().__init__()
+        self.qaspec_fname = 'qaspec.json'
         self.struct_dcm = None
         self.roi_stat_table = None
         self.confusion_matrix_table = None
@@ -207,6 +242,7 @@ class App(QWidget):
         self.contours = None
         self.rtstruct_label = None
         self.configs = None
+        self.qaspec = None
         self.ct = None
         self.ct_label = None
         self.measured_dose_label = None
@@ -226,12 +262,14 @@ class App(QWidget):
         config_fname = 'config.json'
         with open(config_fname, 'r', encoding='utf-8') as config_file:
             self.configs = json.load(config_file)
+        with open(self.qaspec_fname, 'r', encoding='utf-8') as qaspec_file:
+            self.qaspec = json.load(qaspec_file)
 
     def load_cache(self):
         self.cache = diskcache.Cache("tmp", size_limit=int(int(self.configs["cacheLimitGB"]) * 1e9))
         self.cache.reset('cull_limit', 0)
 
-        self.update_ct(self.configs['CTDir'])
+        self.update_ct(self.configs['CTDir'], True)
         self.update_measured_dose(self.configs['3DVHdoseFname'])
         self.update_planned_dose(self.configs['TPSdoseFname'])
         self.update_rtstruct(self.configs['RtStructFname'])
@@ -459,7 +497,7 @@ class App(QWidget):
         msgBox.setStandardButtons(QMessageBox.Ok)
         msgBox.exec()
 
-    def update_ct(self, fname):
+    def update_ct(self, fname, quiet=False):
         try:
             rename_CTs_to_SOPInstanceUID(fname + "/")
             cache_key = f"CT file {fname}"
@@ -473,7 +511,8 @@ class App(QWidget):
         except Exception as e:
             print(e)
             print(traceback.format_exc())
-            self.display_warning(f"Could not load {fname}:\n{e}")
+            if not quiet:
+                self.display_warning(f"Could not load {fname}:\n{e}")
 
     def update_rtstruct(self, fname):
         try:
