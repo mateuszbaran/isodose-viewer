@@ -108,6 +108,7 @@ class QAStatWindow(QMainWindow):
         with open(self.parent.qaspec_fname, 'w', encoding='utf-8') as qaspec_file:
             json.dump(self.parent.qaspec, qaspec_file, ensure_ascii=False, indent=2)
         print("saving alternative names successful")
+        self.fill_table()
 
     def match_roi_names(self, roi_name_base, roi_name_cmp):
         ismatch = roi_name_base.lower() == roi_name_cmp.lower()
