@@ -110,6 +110,7 @@ def ct_transform_matrix(dic_image):
     M = np.linalg.inv(M)
     return M
 
+
 # Creates volume corresponding to a structure with struct_id
 # Returns 3D image with black pixels correcsponding to background and pixels labeled with ds.StructureSetROISequence[struct_id].ROINumber
 # corresponding to the structure of interest
@@ -127,14 +128,18 @@ def draw_contours(im_size, roid_id, path_to_ct, dicom_rs):
     # They must be matched based on ROINumber, referenced to in ds.ROIContourSequence and defined in ds.StructureSetROISequence
     # There is a single contour sequence corresponding to a ROI specified by struct_id - I extract this contour sequence
 
-    ROI = [dicom_rs.ROIContourSequence[u].ContourSequence for u in range(len(dicom_rs.ROIContourSequence)) if
-           dicom_rs.ROIContourSequence[u].ReferencedROINumber
-           == dicom_rs.StructureSetROISequence[struct_id].ROINumber][0]
+    ROI = [cnt.ContourSequence for cnt in dicom_rs.ROIContourSequence if
+           cnt.ReferencedROINumber == dicom_rs.StructureSetROISequence[struct_id].ROINumber][0]
 
     dum = np.zeros(im_size, dtype=np.uint8)
 
     for seq in ROI:
-        dic_image = pydicom.dcmread(path_to_ct + '/CT.' + seq.ContourImageSequence[0].ReferencedSOPInstanceUID + '.dcm')
+        if hasattr(seq, 'ContourImageSequence'):
+            dic_image = pydicom.dcmread(
+                path_to_ct + '/CT.' + seq.ContourImageSequence[0].ReferencedSOPInstanceUID + '.dcm')
+        else:
+            print(f"warning: no ContourImageSequence for ROI {dicom_rs.StructureSetROISequence[struct_id].ROIName}")
+            continue
 
         M = ct_transform_matrix(dic_image)
         points = np.swapaxes(np.reshape(seq.ContourData, (-1, 3)), 0, 1)
@@ -142,7 +147,8 @@ def draw_contours(im_size, roid_id, path_to_ct, dicom_rs):
         points = np.dot(M, points)[:2, :]
 
         big = int(dicom_rs.StructureSetROISequence[struct_id].ROINumber)  # 255
-        CTSlice = int(dic_image[0x0020, 0x0013].value) - 1  # numery sliców w Dicom startują od 1
+        CTSlice = int(dic_image.InstanceNumber) - 1  # numery sliców w Dicom startują od 1
+
         dum2D = np.zeros(im_size[0:2], dtype=np.uint8)
         for id in range(points.shape[1] - 1):
             cv2.line(dum2D, (int(points[1, id]), int(points[0, id])), (int(points[1, id + 1]), int(points[0, id + 1])),
@@ -156,7 +162,10 @@ def draw_contours(im_size, roid_id, path_to_ct, dicom_rs):
         im_flood_fill = im_flood_fill.astype("uint8")
         cv2.floodFill(im_flood_fill, mask, (0, 0), 128)
         dum2D[im_flood_fill != 128] = big
-        np.copyto(dum[:, :, CTSlice], dum2D)
+        if CTSlice < dum.shape[2]:
+            np.copyto(dum[:, :, CTSlice], dum2D)
+        else:
+            print(f"warning: CTSlice number {CTSlice} greater than the number of CT slices ({dum.shape[2]})")
 
     return dum
 

@@ -642,24 +642,36 @@ class App(QWidget):
 
                 if self.planned_dose_ct is not None and self.contours is not None:
                     doses_ref = self.planned_dose_ct[self.contours[roi[0]] != 0]
-                    mean_dose = np.mean(doses_ref)
+                    if len(doses_ref) > 0:
+                        mean_dose = np.mean(doses_ref)
+                        std_dose = np.std(doses_ref)
+                        min_dose = np.min(doses_ref)
+                        max_dose = np.max(doses_ref)
+                    else:
+                        mean_dose = np.NaN
+                        std_dose = np.NaN
+                        min_dose = np.NaN
+                        max_dose = np.NaN
                     self.roi_stat_table.setItem(roi_row, 5, QTableWidgetItem(f"{mean_dose:.2f}"))
-                    std_dose = np.std(doses_ref)
                     self.roi_stat_table.setItem(roi_row, 6, QTableWidgetItem(f"{std_dose:.2f}"))
-                    min_dose = np.min(doses_ref)
                     self.roi_stat_table.setItem(roi_row, 7, QTableWidgetItem(f"{min_dose:.2f}"))
-                    max_dose = np.max(doses_ref)
                     self.roi_stat_table.setItem(roi_row, 8, QTableWidgetItem(f"{max_dose:.2f}"))
 
                 if self.measured_dose_ct is not None and self.contours is not None:
                     doses_measured = self.measured_dose_ct[self.contours[roi[0]] != 0]
-                    mean_dose = np.mean(doses_measured)
+                    if len(doses_measured) > 0:
+                        mean_dose = np.mean(doses_measured)
+                        std_dose = np.std(doses_measured)
+                        min_dose = np.min(doses_measured)
+                        max_dose = np.max(doses_measured)
+                    else:
+                        mean_dose = np.NaN
+                        std_dose = np.NaN
+                        min_dose = np.NaN
+                        max_dose = np.NaN
                     self.roi_stat_table.setItem(roi_row, 9, QTableWidgetItem(f"{mean_dose:.2f}"))
-                    std_dose = np.std(doses_measured)
                     self.roi_stat_table.setItem(roi_row, 10, QTableWidgetItem(f"{std_dose:.2f}"))
-                    min_dose = np.min(doses_measured)
                     self.roi_stat_table.setItem(roi_row, 11, QTableWidgetItem(f"{min_dose:.2f}"))
-                    max_dose = np.max(doses_measured)
                     self.roi_stat_table.setItem(roi_row, 12, QTableWidgetItem(f"{max_dose:.2f}"))
 
                 if self.planned_dose_ct is not None and self.measured_dose_ct is not None and self.contours is not None:
