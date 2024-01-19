@@ -45,7 +45,10 @@ def calculate_gpr_for_roi(gamma_img, roi_mask):
     gg[np.isnan(gamma_img)] = 0
     gg[roi_mask == 0] = 0
     big_gamma = len(np.where(gg > 1)[0])
-    return 1 - big_gamma / vol
+    if vol == 0:
+        return 1
+    else:
+        return 1 - big_gamma / vol
 
 
 def read_phsp_txt(fname, **load_params):
