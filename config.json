@@ -4,8 +4,6 @@
   "RtStructFname": "/home/mateusz/Desktop/tmp/isodose-data/DCMRT_Structures(TEST FANTOM ANTROPOMOR).dcm",
   "CTDir": "/home/mateusz/Desktop/tmp/isodose-data/CT/",
   "saveDir": "./results/",
-  "doseTol": 3,
-  "distTol": 3,
   "DVHBins": 200,
   "DVHRange": [
     0.0,
@@ -23,7 +21,7 @@
     "CTV"
   ],
   "gamma": {
-    "interpFraction": 2,
+    "interpFraction": 5,
     "doseTol_percent": 3,
     "distanceTol_mm": 3,
     "lowerDoseCutoffPercent": 10,
