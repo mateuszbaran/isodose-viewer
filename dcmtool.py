@@ -13,7 +13,7 @@ import numpy as np
 import os
 
 
-def get_seqs(dicom_rs, roid_id, path_to_ct):
+def get_seqs(dicom_rs, roid_id, path_to_ct, ct_prefix="CT."):
     roi_numbers = [dum.ROINumber for dum in dicom_rs.StructureSetROISequence]
     struct_id = roi_numbers.index(roid_id)
 
@@ -33,7 +33,8 @@ def get_seqs(dicom_rs, roid_id, path_to_ct):
 
     point_seqs = []
     for seq in ROI:
-        dic_image = pydicom.dcmread(path_to_ct + '/CT.' + seq.ContourImageSequence[0].ReferencedSOPInstanceUID + '.dcm')
+        dic_image = pydicom.dcmread(
+            path_to_ct + '/' + ct_prefix + seq.ContourImageSequence[0].ReferencedSOPInstanceUID + '.dcm')
 
         M = ct_transform_matrix(dic_image)
         points = np.swapaxes(np.reshape(seq.ContourData, (-1, 3)), 0, 1)
@@ -71,7 +72,37 @@ def export_shapes():
     return roi_data
 
 
-roi_data = export_shapes()
+def export_shapes_v2():
+    roi_data = {}
+    for p in [1, 2]:
+        for f in range(1, 4):
+            print(f"Processing patient {p}, fraction {f}")
+            dir = f"/home/mateusz/Desktop/tmp/sco/Test nowego PineDICOM/TEST-pacjent_kV/ANON-PATIENT_ID_{p:03d}/Frakcja_{f}/"
+            try:
+                rs_fname = ""
+                for fname in os.listdir(dir):
+                    if fname[:21] == "RTStructureSetStorage":
+                        rs_fname = fname
+                        break
+
+                print(rs_fname)
+                struct_dcm = pydicom.dcmread(dir + rs_fname)
+                rois = display_structure_ids_ds(struct_dcm)
+                for roi in rois:
+                    if roi[1] not in roi_data.keys():
+                        roi_data[roi[1]] = {}
+                    if p not in roi_data[roi[1]].keys():
+                        roi_data[roi[1]][p] = {}
+
+                    print(f"Adding data for {roi}, {p}, {f}")
+                    roi_data[roi[1]][p][f] = get_seqs(struct_dcm, roi[0], dir, ct_prefix='CTImageStorage_')
+
+            except Exception as e:
+                print(e)
+    return roi_data
+
+
+roi_data = export_shapes_v2()
 
 
 def save_shapes(roi_data):
