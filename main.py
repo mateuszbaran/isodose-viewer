@@ -8,7 +8,7 @@ import traceback
 
 from PyQt5.QtWidgets import QApplication, QMainWindow, QWidget, QPushButton, QFileDialog, QMessageBox, QGridLayout, \
     QLabel, QVBoxLayout, QHBoxLayout, QComboBox, QDoubleSpinBox, QTableWidget, QTableWidgetItem, QAbstractItemView, \
-    QLineEdit
+    QLineEdit, QCheckBox
 
 from PyQt5 import QtCore, QtGui
 from PyQt5.QtGui import QColor, QPainter
@@ -226,6 +226,7 @@ class App(QWidget):
     def __init__(self):
         super().__init__()
         self.qaspec_fname = 'qaspec.json'
+        self.cumulative_checkbox = None
         self.struct_dcm = None
         self.roi_stat_table = None
         self.confusion_matrix_table = None
@@ -342,8 +343,13 @@ class App(QWidget):
         self.dd_plot_widget.clear()
         self.dd_plot_widget.addLegend()
         roi_voxel_count = np.count_nonzero(self.contours[selected_roi_id])
-        cold_hist, cold_hist_bin_edges = np.histogram(diffs_cold, density=False)
-        hot_hist, hot_hist_bin_edges = np.histogram(diffs_hot, density=False)
+        bins_list_cold = np.arange(np.floor(np.min(diffs_cold)), 0.25, 0.25)
+        bins_list_hot = np.arange(0.0, np.ceil(np.max(diffs_hot)) + 0.25, 0.25)
+        cold_hist, cold_hist_bin_edges = np.histogram(diffs_cold, bins=bins_list_cold, density=False)
+        hot_hist, hot_hist_bin_edges = np.histogram(diffs_hot, bins=bins_list_hot, density=False)
+        if self.cumulative_checkbox.isChecked():
+            cold_hist = np.cumsum(cold_hist)
+            hot_hist = np.flip(np.cumsum(np.flip(hot_hist)))
         bargraph_cold = pg.BarGraphItem(x0=cold_hist_bin_edges[:-1], x1=cold_hist_bin_edges[1:],
                                         height=cold_hist / roi_voxel_count, name="Cold region",
                                         brush=pg.mkBrush(color=(0, 0, 200)))
@@ -418,6 +424,10 @@ class App(QWidget):
         self.isodose_spinbox.setValue(60.0)
         self.isodose_spinbox.valueChanged.connect(self.update_isodose_selection)
 
+        self.cumulative_checkbox = QCheckBox("Cumulative histograms", self)
+        self.cumulative_checkbox.setChecked(True)
+        self.cumulative_checkbox.stateChanged.connect(self.update_isodose_selection)
+
         self.dvh_plot_widget = pg.plot(title="DVH")
         self.dvh_plot_widget.setLabel('left', 'Volume (relative to volume of ROI)')
         self.dvh_plot_widget.setLabel('bottom', 'Dose [Gy]')
@@ -470,6 +480,7 @@ class App(QWidget):
 
         mid_layout.addWidget(self.roi_combobox)
         mid_layout.addWidget(self.isodose_spinbox)
+        mid_layout.addWidget(self.cumulative_checkbox)
 
         plot_layout.addWidget(self.dvh_plot_widget)
         plot_layout.addWidget(self.dd_plot_widget)
