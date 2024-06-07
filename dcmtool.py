@@ -74,10 +74,12 @@ def export_shapes():
 
 def export_shapes_v2():
     roi_data = {}
-    for p in [1, 2]:
-        for f in range(1, 4):
+    for p in [6, 7, 8, 9]:
+        for f in range(1, 30):
             print(f"Processing patient {p}, fraction {f}")
-            dir = f"/home/mateusz/Desktop/tmp/sco/Test nowego PineDICOM/TEST-pacjent_kV/ANON-PATIENT_ID_{p:03d}/Frakcja_{f}/"
+            #dir = f"/home/mateusz/Desktop/tmp/sco/Test nowego PineDICOM/TEST-pacjent_kV/ANON-PATIENT_ID_{p:03d}/Frakcja_{f}/"
+
+            dir = f"/home/mateusz/Desktop/tmp/sco/240514_data/Pacjent_{p}_ANON/ANON-PATIENT_ID_001/Frakcja_{f}/"
             try:
                 rs_fname = ""
                 for fname in os.listdir(dir):
