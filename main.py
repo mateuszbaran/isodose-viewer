@@ -2,6 +2,7 @@ import diskcache
 import nibabel
 import napari
 import pydicom
+import csv
 
 import diskcache as dc
 import traceback
@@ -343,8 +344,8 @@ class App(QWidget):
         self.dd_plot_widget.clear()
         self.dd_plot_widget.addLegend()
         roi_voxel_count = np.count_nonzero(self.contours[selected_roi_id])
-        bins_list_cold = np.arange(np.floor(np.min(diffs_cold)), 0.25, 0.25)
-        bins_list_hot = np.arange(0.0, np.ceil(np.max(diffs_hot)) + 0.25, 0.25)
+        bins_list_cold = np.arange(np.floor(np.min(diffs_cold, initial=0.0)), 0.25, 0.25)
+        bins_list_hot = np.arange(0.0, np.ceil(np.max(diffs_hot, initial=0.0)) + 0.25, 0.25)
         cold_hist, cold_hist_bin_edges = np.histogram(diffs_cold, bins=bins_list_cold, density=False)
         hot_hist, hot_hist_bin_edges = np.histogram(diffs_hot, bins=bins_list_hot, density=False)
         if self.cumulative_checkbox.isChecked():
@@ -413,6 +414,10 @@ class App(QWidget):
         button_qa_stats.setText("QA statistics")
         button_qa_stats.clicked.connect(self.show_qa_statistics)
 
+        button_save_qa_stats = QPushButton(self)
+        button_save_qa_stats.setText("Save QA statistics")
+        button_save_qa_stats.clicked.connect(self.save_qa_stats)
+
         self.roi_combobox = QComboBox(self)
         self.roi_combobox.addItem("Select ROI")
         self.roi_combobox.currentIndexChanged.connect(self.update_roi_selection)
@@ -477,6 +482,7 @@ class App(QWidget):
         grid_layout.addWidget(self.gamma_label, 1, 4)
         grid_layout.addWidget(button_browse_slices, 0, 6)
         grid_layout.addWidget(button_qa_stats, 0, 7)
+        grid_layout.addWidget(button_save_qa_stats, 0, 8)
 
         mid_layout.addWidget(self.roi_combobox)
         mid_layout.addWidget(self.isodose_spinbox)
@@ -705,6 +711,29 @@ class App(QWidget):
     def show_qa_statistics(self):
         qa_stat_window = QAStatWindow(self)
         qa_stat_window.show()
+
+    def save_qa_stats(self):
+        fname, ffilter = QFileDialog.getSaveFileName(self, 'Save QA Statistics', '.', filter='CSV files (*.csv)')
+
+        def item_to_text(item):
+            if item is None:
+                return ""
+            else:
+                return item.text()
+
+        if fname:
+            columns = range(self.roi_stat_table.columnCount())
+            header = [self.roi_stat_table.horizontalHeaderItem(column).text()
+                      for column in columns]
+
+            with open(fname, 'w') as csvfile:
+                writer = csv.writer(
+                    csvfile, dialect='excel', lineterminator='\n')
+                writer.writerow(header)
+                for row in range(self.roi_stat_table.rowCount()):
+                    writer.writerow(
+                        item_to_text(self.roi_stat_table.item(row, column))
+                        for column in columns)
 
     def open_file_ct_clicked(self):
         fname = QFileDialog.getExistingDirectory(self, 'Open CT folder')
